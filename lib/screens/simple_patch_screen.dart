@@ -14,7 +14,6 @@ class SimplePatchScreen extends StatefulWidget {
 
 class _SimplePatchScreenState extends State<SimplePatchScreen> {
   final FileService _fileService = FileService();
-  final TextEditingController _superKeyController = TextEditingController();
   bool _isSaving = false;
 
   @override
@@ -24,9 +23,6 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
   }
 
   Future<void> _initData() async {
-    final patchProvider = context.read<PatchProvider>();
-    _superKeyController.text = patchProvider.superKey ?? '';
-    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<VersionProvider>().loadVersions();
     });
@@ -34,7 +30,6 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
 
   @override
   void dispose() {
-    _superKeyController.dispose();
     super.dispose();
   }
 
@@ -58,7 +53,6 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
       return;
     }
 
-    patchProvider.setSuperKey(_superKeyController.text);
     await patchProvider.patchOnly(versionProvider);
   }
 
@@ -128,13 +122,13 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const PatchTargetSelector(),
+                const SizedBox(height: 16),
                 const VersionSelector(),
                 const SizedBox(height: 16),
                 _buildFileSelector(patchProvider),
                 const SizedBox(height: 16),
                 _buildKpmModuleSelector(patchProvider),
-                const SizedBox(height: 16),
-                _buildSuperKeyInput(patchProvider),
                 const SizedBox(height: 24),
                 _buildActionButtons(patchProvider),
                 const SizedBox(height: 24),
@@ -211,65 +205,6 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
                   ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSuperKeyInput(PatchProvider patchProvider) {
-    final l10n = S.of(context);
-
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.vpn_key, color: Colors.orange[600]),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.superKey,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _superKeyController,
-              enabled: !patchProvider.isRunning,
-              decoration: InputDecoration(
-                hintText: l10n.enterSuperKey,
-                hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                errorText: patchProvider.superKeyValidationError,
-                errorStyle: TextStyle(fontSize: 12, color: Colors.red[700]),
-                errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.red[300]!),
-                ),
-              ),
-              onChanged: (value) {
-                patchProvider.setSuperKey(value);
-              },
             ),
           ],
         ),

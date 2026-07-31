@@ -338,11 +338,6 @@ class DeviceService {
     return checkAppInstalled(Constants.folkpatchPackageName, onLog: onLog);
   }
 
-  /// 检测 FolkLite 是否已安装
-  Future<bool> checkFolkLiteInstalled({LogCallback? onLog}) async {
-    return checkAppInstalled(Constants.folklitePackageName, onLog: onLog);
-  }
-
   /// 通过 ADB 安装 APK
   Future<bool> installApk(String apkPath, {LogCallback? onLog}) async {
     try {
@@ -378,10 +373,5 @@ class DeviceService {
   /// 安装 FolkPatch
   Future<bool> installFolkPatch({LogCallback? onLog}) async {
     return installApk(Constants.folkpatchApkPath, onLog: onLog);
-  }
-
-  /// 安装 FolkLite
-  Future<bool> installFolkLite({LogCallback? onLog}) async {
-    return installApk(Constants.folkliteApkPath, onLog: onLog);
   }
 }

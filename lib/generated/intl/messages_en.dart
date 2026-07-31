@@ -175,7 +175,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "driverInstallSubtitle": MessageLookupByLibrary.simpleMessage(
       "Install the driver to resolve missing driver issues",
     ),
-    "enterSuperKey": MessageLookupByLibrary.simpleMessage("Enter SuperKey"),
     "errAdbNotAvailable": MessageLookupByLibrary.simpleMessage(
       "ADB is not available",
     ),
@@ -210,15 +209,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "errSelectBootFirst": MessageLookupByLibrary.simpleMessage(
       "Please select boot.img file first",
     ),
-    "errSuperKeyContainsSpaces": MessageLookupByLibrary.simpleMessage(
-      "SuperKey must not contain spaces",
-    ),
-    "errSuperKeyInvalidChars": MessageLookupByLibrary.simpleMessage(
-      "SuperKey must contain only numbers and letters",
-    ),
-    "errSuperKeyLength": MessageLookupByLibrary.simpleMessage(
-      "SuperKey must be 8-63 characters",
-    ),
     "errUnpackFailed": m16,
     "exportLogs": MessageLookupByLibrary.simpleMessage("Export Logs"),
     "exportLogsTooltip": MessageLookupByLibrary.simpleMessage("Export Logs"),
@@ -238,9 +228,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "flashing": MessageLookupByLibrary.simpleMessage("Flashing..."),
     "folkpatchDesc": MessageLookupByLibrary.simpleMessage(
       "An excellent KernelPatch management client",
-    ),
-    "folkliteDesc": MessageLookupByLibrary.simpleMessage(
-      "A lightweight KernelPatch management client",
     ),
     "github": MessageLookupByLibrary.simpleMessage("GitHub"),
     "home": MessageLookupByLibrary.simpleMessage("Home"),
@@ -443,6 +430,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "patchOnlyComplete": MessageLookupByLibrary.simpleMessage(
       "Patch complete!",
     ),
+    "patchTarget": MessageLookupByLibrary.simpleMessage("Patch Target"),
+    "patchTargetDesc": MessageLookupByLibrary.simpleMessage(
+      "Select patch target to use corresponding KernelPatch version",
+    ),
     "patchedFile": MessageLookupByLibrary.simpleMessage("Patched File"),
     "patching": MessageLookupByLibrary.simpleMessage("Patching..."),
     "pleaseSelectFile": MessageLookupByLibrary.simpleMessage(
@@ -540,10 +531,6 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "stepSaveFile": MessageLookupByLibrary.simpleMessage("Save File"),
     "stepSelectBoot": MessageLookupByLibrary.simpleMessage("Select Boot File"),
-    "superKey": MessageLookupByLibrary.simpleMessage("SuperKey"),
-    "superKeyValidationError": MessageLookupByLibrary.simpleMessage(
-      "SuperKey should be 8-63 characters, containing only numbers and letters, no special characters allowed",
-    ),
     "switchToChinese": MessageLookupByLibrary.simpleMessage("切换为中文"),
     "switchToEnglish": MessageLookupByLibrary.simpleMessage(
       "Switch to English",

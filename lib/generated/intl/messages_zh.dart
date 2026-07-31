@@ -158,7 +158,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "driverInstall": MessageLookupByLibrary.simpleMessage("驱动安装"),
     "driverInstallPage": MessageLookupByLibrary.simpleMessage("驱动安装"),
     "driverInstallSubtitle": MessageLookupByLibrary.simpleMessage("安装设备驱动程序"),
-    "enterSuperKey": MessageLookupByLibrary.simpleMessage("输入 SuperKey"),
     "errAdbNotAvailable": MessageLookupByLibrary.simpleMessage("ADB 不可用"),
     "errAdbNotExist": m1,
     "errBackupException": m2,
@@ -185,15 +184,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "errSelectBootFirst": MessageLookupByLibrary.simpleMessage(
       "请先选择 boot.img 文件",
     ),
-    "errSuperKeyContainsSpaces": MessageLookupByLibrary.simpleMessage(
-      "超级密钥不得包含空白字符",
-    ),
-    "errSuperKeyInvalidChars": MessageLookupByLibrary.simpleMessage(
-      "超级密钥只能包含数字和字母",
-    ),
-    "errSuperKeyLength": MessageLookupByLibrary.simpleMessage(
-      "超级密钥必须为 8-63 个字符",
-    ),
     "errUnpackFailed": m16,
     "exportLogs": MessageLookupByLibrary.simpleMessage("导出日志"),
     "exportLogsTooltip": MessageLookupByLibrary.simpleMessage("导出日志"),
@@ -207,9 +197,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "flashing": MessageLookupByLibrary.simpleMessage("刷入中..."),
     "folkpatchDesc": MessageLookupByLibrary.simpleMessage(
       "一个优秀的KernelPatch管理客户端",
-    ),
-    "folkliteDesc": MessageLookupByLibrary.simpleMessage(
-      "轻量级KernelPatch管理客户端",
     ),
     "github": MessageLookupByLibrary.simpleMessage("GitHub"),
     "home": MessageLookupByLibrary.simpleMessage("首页"),
@@ -340,6 +327,10 @@ class MessageLookup extends MessageLookupByLibrary {
       "OPPO 官方 USB 驱动程序，适用于 Windows 10 及以上系统",
     ),
     "patchOnlyComplete": MessageLookupByLibrary.simpleMessage("修补完成！"),
+    "patchTarget": MessageLookupByLibrary.simpleMessage("修补目标"),
+    "patchTargetDesc": MessageLookupByLibrary.simpleMessage(
+      "选择修补目标以使用对应的 KernelPatch 版本",
+    ),
     "patchedFile": MessageLookupByLibrary.simpleMessage("修补文件"),
     "patching": MessageLookupByLibrary.simpleMessage("修补中..."),
     "pleaseSelectFile": MessageLookupByLibrary.simpleMessage(
@@ -411,10 +402,6 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "stepSaveFile": MessageLookupByLibrary.simpleMessage("保存文件"),
     "stepSelectBoot": MessageLookupByLibrary.simpleMessage("选择 Boot 文件"),
-    "superKey": MessageLookupByLibrary.simpleMessage("SuperKey"),
-    "superKeyValidationError": MessageLookupByLibrary.simpleMessage(
-      "超级密钥长度应为 8-63 个字符，包含数字和字母，不得包含特殊字符",
-    ),
     "switchToChinese": MessageLookupByLibrary.simpleMessage("切换为中文"),
     "switchToEnglish": MessageLookupByLibrary.simpleMessage(
       "Switch to English",

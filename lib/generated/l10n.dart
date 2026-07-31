@@ -324,56 +324,16 @@ class S {
     );
   }
 
-  /// `SuperKey`
-  String get superKey {
-    return Intl.message('SuperKey', name: 'superKey', desc: '', args: []);
+  /// `Patch Target`
+  String get patchTarget {
+    return Intl.message('Patch Target', name: 'patchTarget', desc: '', args: []);
   }
 
-  /// `Enter SuperKey`
-  String get enterSuperKey {
+  /// `Select patch target to use corresponding KernelPatch version`
+  String get patchTargetDesc {
     return Intl.message(
-      'Enter SuperKey',
-      name: 'enterSuperKey',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `SuperKey should be 8-63 characters, containing only numbers and letters, no special characters allowed`
-  String get superKeyValidationError {
-    return Intl.message(
-      'SuperKey should be 8-63 characters, containing only numbers and letters, no special characters allowed',
-      name: 'superKeyValidationError',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `SuperKey must be 8-63 characters`
-  String get errSuperKeyLength {
-    return Intl.message(
-      'SuperKey must be 8-63 characters',
-      name: 'errSuperKeyLength',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `SuperKey must contain only numbers and letters`
-  String get errSuperKeyInvalidChars {
-    return Intl.message(
-      'SuperKey must contain only numbers and letters',
-      name: 'errSuperKeyInvalidChars',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `SuperKey must not contain spaces`
-  String get errSuperKeyContainsSpaces {
-    return Intl.message(
-      'SuperKey must not contain spaces',
-      name: 'errSuperKeyContainsSpaces',
+      'Select patch target to use corresponding KernelPatch version',
+      name: 'patchTargetDesc',
       desc: '',
       args: [],
     );
@@ -1759,16 +1719,6 @@ class S {
     return Intl.message(
       'An excellent KernelPatch management client',
       name: 'folkpatchDesc',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `A lightweight KernelPatch management client`
-  String get folkliteDesc {
-    return Intl.message(
-      'A lightweight KernelPatch management client',
-      name: 'folkliteDesc',
       desc: '',
       args: [],
     );

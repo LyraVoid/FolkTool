@@ -30,12 +30,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initData() async {
     final deviceProvider = context.read<DeviceProvider>();
-    final patchProvider = context.read<PatchProvider>();
     
     await deviceProvider.checkDriver();
     deviceProvider.startMonitoring();
     
-    await patchProvider.loadSuperKey();
     await _loadRecentFiles();
   }
 

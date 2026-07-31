@@ -1,7 +1,7 @@
 name: FolkTool
 description: "FolkTool - KernelPatch 自动刷入工具"
 publish_to: 'none'
-version: 1.6.0+4
+version: 1.7.0+5
 
 environment:
   sdk: ^3.11.0
@@ -29,12 +29,12 @@ dev_dependencies:
   intl_utils: ^2.8.4
 
 flutter:
+  generate: true
   uses-material-design: true
 
   assets:
     - assets/kpimg
     - bin/
-    - kptools/
     - apk/
     - drive/
     - kp_versions/

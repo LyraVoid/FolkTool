@@ -12,7 +12,6 @@ class KpToolsService {
   Future<PatchResult> patchBootImage({
     required String inputPath,
     required String outputPath,
-    String? superKey,
     List<String> kpmModules = const [],
     KpVersion? kpVersion,
     LogCallback? onLog,
@@ -81,8 +80,6 @@ class KpToolsService {
           '-k', kpimgPath,
           '-o', kernelPath,
         ];
-        
-        patchArgs.addAll(['-S', superKey ?? '']);
         
         final List<String> kpmPaths = [];
         for (final module in kpmModules) {

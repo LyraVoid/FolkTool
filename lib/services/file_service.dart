@@ -122,16 +122,6 @@ class FileService {
     await prefs.setStringList(Constants.recentFilesKey, recentFiles);
   }
 
-  Future<String?> getLastSuperKey() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(Constants.superKeyKey);
-  }
-
-  Future<void> saveSuperKey(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(Constants.superKeyKey, key);
-  }
-
   String generatePatchedFileName(String originalPath) {
     final dir = p.dirname(originalPath);
     final name = p.basenameWithoutExtension(originalPath);

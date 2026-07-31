@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../models/patch_target.dart';
 
 class Constants {
-  static String get appVersion => '1.6.0';
+  static String get appVersion => '1.7.0';
   static String get appName => 'FolkTool';
   static String get appFullName => 'FolkTool - KernelPatch 自动刷入工具';
   
@@ -22,10 +23,9 @@ class Constants {
     }
 
     final binDir = Directory(p.join(exeFile.parent.path, 'bin'));
-    final kptoolsDir = Directory(p.join(exeFile.parent.path, 'kptools'));
     final kpVersionsDir = Directory(p.join(exeFile.parent.path, 'kp_versions'));
     
-    if (binDir.existsSync() && kptoolsDir.existsSync() && kpVersionsDir.existsSync()) {
+    if (binDir.existsSync() && kpVersionsDir.existsSync()) {
       return true;
     }
 
@@ -70,10 +70,9 @@ class Constants {
     // 检查当前目录是否是 FolkTool 项目根目录
     final binDir = Directory(p.join(currentDir, 'bin'));
     final apkDir = Directory(p.join(currentDir, 'apk'));
-    final kptoolsDir = Directory(p.join(currentDir, 'kptools'));
     final kpVersionsDir = Directory(p.join(currentDir, 'kp_versions'));
 
-    if (binDir.existsSync() && apkDir.existsSync() && kptoolsDir.existsSync() && kpVersionsDir.existsSync()) {
+    if (binDir.existsSync() && apkDir.existsSync() && kpVersionsDir.existsSync()) {
       return currentDir;
     }
 
@@ -82,10 +81,9 @@ class Constants {
     for (int i = 0; i < 5; i++) {
       final testBin = Directory(p.join(dir.path, 'bin'));
       final testApk = Directory(p.join(dir.path, 'apk'));
-      final testKptools = Directory(p.join(dir.path, 'kptools'));
       final testKpVersions = Directory(p.join(dir.path, 'kp_versions'));
 
-      if (testBin.existsSync() && testApk.existsSync() && testKptools.existsSync() && testKpVersions.existsSync()) {
+      if (testBin.existsSync() && testApk.existsSync() && testKpVersions.existsSync()) {
         return dir.path;
       }
 
@@ -111,18 +109,16 @@ class Constants {
     return _exeDir;
   }
   
-  static String get kptoolsPath => p.join(_assetsRoot, 'kptools', 'kptools.exe');
+  static String get kptoolsPath => sharedKptoolsPath;
   static String get adbPath => p.join(_assetsRoot, 'bin', 'adb.exe');
   static String get fastbootPath => p.join(_assetsRoot, 'bin', 'fastboot.exe');
   static String get kpimgPath => p.join(_assetsRoot, 'assets', 'kpimg');
   
   static String get apatchApkPath => p.join(_assetsRoot, 'apk', 'APatch.apk');
   static String get folkpatchApkPath => p.join(_assetsRoot, 'apk', 'FolkPatch.apk');
-  static String get folkliteApkPath => p.join(_assetsRoot, 'apk', 'FolkLite.apk');
   
 static const String apatchPackageName = 'me.bmax.apatch';
 static const String folkpatchPackageName = 'me.yuki.folk';
-static const String folklitePackageName = 'mi.yuki.folk';
   
   static String get outputDirName => 'FolkTool/patched';
   static String get logsDirName => 'FolkTool/logs';
@@ -133,10 +129,8 @@ static const String folklitePackageName = 'mi.yuki.folk';
   static int get flashTimeout => 120;
   static int get rebootWaitTime => 5;
   
-  static String get defaultSuperKey => '';
   static int get maxRecentFiles => 10;
   
-  static String get superKeyKey => 'last_super_key';
   static String get recentFilesKey => 'recent_files';
   
   static String get kpVersionsBasePath {
@@ -199,15 +193,22 @@ static const String folklitePackageName = 'mi.yuki.folk';
     debugPrint('[Constants] No kp_versions found, trying: ${potentialPaths.first}');
     return potentialPaths.first;
   }
+
+  static String get sharedKptoolsPath => p.join(kpVersionsBasePath, 'windows', 'kptools.exe');
+  static String get folkpatchVersionsPath => p.join(kpVersionsBasePath, 'folkpatch');
+  static String get apatchVersionsPath => p.join(kpVersionsBasePath, 'apatch');
+
   static String get minVersionWithUnpack => '0.13.0';
   static String get selectedVersionKey => 'selected_kp_version';
   static String get customVersionPathKey => 'custom_kp_version_path';
-  
-  static String getKpVersionPath(String version) => p.join(kpVersionsBasePath, version, 'kpimg-android');
-  static String getKpToolsPathForVersion(String version) {
-    if (version == minVersionWithUnpack) {
-      return kptoolsPath;
-    }
-    return kptoolsPath;
+  static String get patchTargetKey => 'patch_target';
+
+  /// 不再区分版本号，每个源固定使用单一 kpimg。此版本号仅用于展示及 unpack 支持判断。
+  static String get defaultKpVersion => '0.13.3';
+
+  /// 单版本 kpimg 路径：kp_versions/<源>/kpimg
+  static String getKpimgFilePath(PatchTarget source) {
+    final basePath = source == PatchTarget.folkpatch ? folkpatchVersionsPath : apatchVersionsPath;
+    return p.join(basePath, 'kpimg');
   }
 }

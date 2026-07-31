@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
-import '../config/constants.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../generated/l10n.dart';
@@ -24,7 +23,6 @@ class PatchProvider extends ChangeNotifier {
   
   String? _selectedFilePath;
   String? _patchedFilePath;
-  String? _superKey;
   Set<String> _selectedKpmModules = {};
   List<OperationStep> _steps = [];
   int _currentStepIndex = -1;
@@ -33,12 +31,9 @@ class PatchProvider extends ChangeNotifier {
   String? _errorMessage;
   bool _isCancelling = false;
   String _operationId = '';
-  String? _superKeyValidationError;
   
   String? get selectedFilePath => _selectedFilePath;
   String? get patchedFilePath => _patchedFilePath;
-  String? get superKey => _superKey;
-  String? get superKeyValidationError => _superKeyValidationError;
   Set<String> get selectedKpmModules => Set.unmodifiable(_selectedKpmModules);
   List<OperationStep> get steps => _steps;
   int get currentStepIndex => _currentStepIndex;
@@ -51,11 +46,6 @@ class PatchProvider extends ChangeNotifier {
   bool get isFailed => _operationState == PatchOperationState.failed;
   double get progress => _steps.isEmpty ? 0 : (_currentStepIndex + 1) / _steps.length;
   
-  Future<void> loadSuperKey() async {
-    _superKey = await _fileService.getLastSuperKey() ?? Constants.defaultSuperKey;
-    notifyListeners();
-  }
-
   void setSelectedFile(String path) {
     _selectedFilePath = path;
     _patchedFilePath = null;
@@ -63,40 +53,6 @@ class PatchProvider extends ChangeNotifier {
     _logs.clear();
     _errorMessage = null;
     notifyListeners();
-  }
-
-  void setSuperKey(String key) {
-    _superKey = key;
-    _validateSuperKey();
-    _fileService.saveSuperKey(key);
-    notifyListeners();
-  }
-
-  void _validateSuperKey() {
-    final key = _superKey ?? '';
-    
-    if (key.isEmpty) {
-      _superKeyValidationError = null;
-      return;
-    }
-    
-    final trimmedKey = key.trim();
-    if (trimmedKey != key) {
-      _superKeyValidationError = S.current.errSuperKeyContainsSpaces;
-      return;
-    }
-    
-    if (trimmedKey.length < 8 || trimmedKey.length > 63) {
-      _superKeyValidationError = S.current.errSuperKeyLength;
-      return;
-    }
-    
-    if (!RegExp(r'^[a-zA-Z0-9]+$').hasMatch(trimmedKey)) {
-      _superKeyValidationError = S.current.errSuperKeyInvalidChars;
-      return;
-    }
-    
-    _superKeyValidationError = null;
   }
 
   void setKpmModules(Set<String> modules) {
@@ -209,7 +165,6 @@ class PatchProvider extends ChangeNotifier {
       final patchResult = await _kptoolsService.patchBootImage(
         inputPath: _selectedFilePath!,
         outputPath: _patchedFilePath!,
-        superKey: _superKey,
         kpmModules: _selectedKpmModules.toList(),
         kpVersion: versionProvider.selectedVersion,
         onLog: (line) => _addLog(LogLevel.info, line),
@@ -371,7 +326,6 @@ class PatchProvider extends ChangeNotifier {
       final result = await _kptoolsService.patchBootImage(
         inputPath: _selectedFilePath!,
         outputPath: _patchedFilePath!,
-        superKey: _superKey,
         kpmModules: _selectedKpmModules.toList(),
         kpVersion: versionProvider.selectedVersion,
         onLog: (line) => _addLog(LogLevel.info, line),
@@ -414,7 +368,6 @@ class PatchProvider extends ChangeNotifier {
     _logs.clear();
     _errorMessage = null;
     _isCancelling = false;
-    _superKeyValidationError = null;
     notifyListeners();
   }
 

@@ -101,7 +101,6 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
     final l10n = S.of(context);
     final apatchStatus = provider.apatchStatus;
     final folkpatchStatus = provider.folkpatchStatus;
-    final folkliteStatus = provider.folkliteStatus;
     
     return Column(
       children: [
@@ -131,20 +130,6 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
           onInstall: folkpatchStatus.installed 
               ? null 
               : () => _installClient(provider, ClientType.folkpatch),
-        ),
-        const SizedBox(height: 12),
-        // FolkLite 状态
-        _buildClientItem(
-          context: context,
-          name: 'FolkLite',
-          description: l10n.folkliteDesc,
-          icon: Icons.lightbulb,
-          installed: folkliteStatus.installed,
-          installing: folkliteStatus.installing,
-          color: Colors.orange,
-          onInstall: folkliteStatus.installed 
-              ? null 
-              : () => _installClient(provider, ClientType.folklite),
         ),
       ],
     );
@@ -268,7 +253,7 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
 
   Future<void> _installClient(DeviceProvider provider, ClientType type) async {
     final l10n = S.of(context);
-    final clientName = type == ClientType.apatch ? 'APatch' : type == ClientType.folkpatch ? 'FolkPatch' : 'FolkLite';
+    final clientName = type == ClientType.apatch ? 'APatch' : 'FolkPatch';
     
     final success = await provider.installClient(
       type,

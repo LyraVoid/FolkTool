@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../providers/version_provider.dart';
 import '../models/kp_version.dart';
-import '../config/constants.dart';
 import '../generated/l10n.dart';
 
 class VersionSelector extends StatelessWidget {
@@ -138,9 +137,11 @@ class VersionSelector extends StatelessWidget {
   
   Widget _buildVersionItem(BuildContext context, KpVersion version) {
     final l10n = S.of(context);
-
+    if (version.isCustom) {
+      return Text(l10n.versionCustom, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500));
+    }
     return Text(
-      version.isCustom ? l10n.versionCustom : version.version,
+      '${version.source.displayName} ${version.version}',
       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
     );
   }

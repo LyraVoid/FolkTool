@@ -1,14 +1,18 @@
+import 'patch_target.dart';
+
 class KpVersion {
   final String version;
   final String kpimgPath;
   final bool isCustom;
   final bool supportsUnpack;
+  final PatchTarget source;
 
   KpVersion({
     required this.version,
     required this.kpimgPath,
     this.isCustom = false,
     bool? supportsUnpack,
+    required this.source,
   }) : supportsUnpack = supportsUnpack ?? _checkUnpackSupport(version);
 
   static bool _checkUnpackSupport(String version) {
@@ -38,14 +42,14 @@ class KpVersion {
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is KpVersion && other.version == version && other.kpimgPath == kpimgPath;
+    return other is KpVersion && other.version == version && other.kpimgPath == kpimgPath && other.source == source;
   }
 
   @override
-  int get hashCode => Object.hash(version, kpimgPath);
+  int get hashCode => Object.hash(version, kpimgPath, source);
 
   @override
   String toString() {
-    return 'KpVersion(version: $version, kpimgPath: $kpimgPath, isCustom: $isCustom, supportsUnpack: $supportsUnpack)';
+    return 'KpVersion(version: $version, kpimgPath: $kpimgPath, isCustom: $isCustom, supportsUnpack: $supportsUnpack, source: $source)';
   }
 }

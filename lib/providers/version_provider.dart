@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/constants.dart';
 import '../models/kp_version.dart';
+import '../models/patch_target.dart';
 import '../services/version_service.dart';
 
 class VersionProvider extends ChangeNotifier {
@@ -12,17 +13,48 @@ class VersionProvider extends ChangeNotifier {
   String? _customVersionPath;
   bool _isLoading = false;
   
+  PatchTarget _currentTarget = PatchTarget.folkpatch;
+  PatchTarget get currentTarget => _currentTarget;
+  
   List<KpVersion> get availableVersions => List.unmodifiable(_availableVersions);
   KpVersion? get selectedVersion => _selectedVersion;
   String? get customVersionPath => _customVersionPath;
   bool get isLoading => _isLoading;
+  
+  void setTarget(PatchTarget target) {
+    if (_currentTarget != target) {
+      _currentTarget = target;
+      _selectedVersion = null;       // Clear old source's selection
+      _customVersionPath = null;     // Clear custom path
+      _saveTarget();
+      loadVersions();  // 重新加载对应源的版本
+    }
+  }
+  
+  Future<void> _saveTarget() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(Constants.patchTargetKey, _currentTarget.name);
+  }
+  
+  Future<void> _loadTarget() async {
+    final prefs = await SharedPreferences.getInstance();
+    final targetName = prefs.getString(Constants.patchTargetKey);
+    if (targetName != null) {
+      _currentTarget = PatchTarget.values.firstWhere(
+        (t) => t.name == targetName,
+        orElse: () => PatchTarget.folkpatch,
+      );
+    }
+  }
   
   Future<void> loadVersions() async {
     _isLoading = true;
     notifyListeners();
     
     try {
-      _availableVersions = await _versionService.getAvailableVersions();
+      await _loadTarget();
+      
+      _availableVersions = await _versionService.getAvailableVersions(source: _currentTarget);
       
       if (_availableVersions.isNotEmpty && _selectedVersion == null) {
         final defaultVersion = _availableVersions.firstWhere(
@@ -45,7 +77,7 @@ class VersionProvider extends ChangeNotifier {
     final customPath = prefs.getString(Constants.customVersionPathKey);
     
     if (customPath != null && customPath.isNotEmpty) {
-      final customVersion = await _versionService.validateCustomVersion(customPath);
+      final customVersion = await _versionService.validateCustomVersion(customPath, source: _currentTarget);
       if (customVersion != null) {
         _selectedVersion = customVersion;
         _customVersionPath = customPath;
@@ -73,7 +105,7 @@ class VersionProvider extends ChangeNotifier {
   }
   
   Future<bool> selectCustomVersion(String filePath) async {
-    final version = await _versionService.validateCustomVersion(filePath);
+    final version = await _versionService.validateCustomVersion(filePath, source: _currentTarget);
     if (version == null) {
       return false;
     }

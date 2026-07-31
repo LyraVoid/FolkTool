@@ -39,13 +39,6 @@
   "fastbootConnected": "Fastboot 已连接",
   "scanning": "正在扫描设备连接",
   
-  "superKey": "SuperKey",
-  "enterSuperKey": "输入 SuperKey",
-  "superKeyValidationError": "超级密钥长度应为 8-63 个字符，包含数字和字母，不得包含特殊字符",
-  "errSuperKeyLength": "超级密钥必须为 8-63 个字符",
-  "errSuperKeyInvalidChars": "超级密钥只能包含数字和字母",
-  "errSuperKeyContainsSpaces": "超级密钥不得包含空白字符",
-  
   "kpmModules": "KPM 模块 (可选)",
   "selectKpmModules": "选择 KPM 模块...",
   "noKpmModules": "未选择模块",
@@ -216,7 +209,6 @@
   "clientCheck": "客户端检测",
   "apatchDesc": "Android 内核级 Root 解决方案",
   "folkpatchDesc": "一个优秀的KernelPatch管理客户端",
-  "folkliteDesc": "轻量级KernelPatch管理客户端",
   "installed": "已安装",
   "install": "安装",
   "installing": "安装中...",
@@ -268,5 +260,8 @@
   "invalidVersionFile": "无效的版本文件",
   "customVersionSaved": "自定义版本已保存",
   "loadingVersions": "加载版本中...",
-  "noVersionsAvailable": "没有可用的版本"
+  "noVersionsAvailable": "没有可用的版本",
+
+  "patchTarget": "修补目标",
+  "patchTargetDesc": "选择修补目标以使用对应的 KernelPatch 版本"
 }

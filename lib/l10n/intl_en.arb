@@ -39,13 +39,6 @@
   "fastbootConnected": "Fastboot Connected",
   "scanning": "Scanning devices...",
   
-  "superKey": "SuperKey",
-  "enterSuperKey": "Enter SuperKey",
-  "superKeyValidationError": "SuperKey should be 8-63 characters, containing only numbers and letters, no special characters allowed",
-  "errSuperKeyLength": "SuperKey must be 8-63 characters",
-  "errSuperKeyInvalidChars": "SuperKey must contain only numbers and letters",
-  "errSuperKeyContainsSpaces": "SuperKey must not contain spaces",
-  
   "kpmModules": "KPM Modules (Optional)",
   "selectKpmModules": "Select KPM modules...",
   "noKpmModules": "No modules selected",
@@ -216,7 +209,6 @@
   "clientCheck": "Client Detection",
   "apatchDesc": "Android kernel-level root solution",
   "folkpatchDesc": "An excellent KernelPatch management client",
-  "folkliteDesc": "A lightweight KernelPatch management client",
   "installed": "Installed",
   "install": "Install",
   "installing": "Installing...",
@@ -268,5 +260,8 @@
   "invalidVersionFile": "Invalid version file",
   "customVersionSaved": "Custom version saved",
   "loadingVersions": "Loading versions...",
-  "noVersionsAvailable": "No versions available"
+  "noVersionsAvailable": "No versions available",
+
+  "patchTarget": "Patch Target",
+  "patchTargetDesc": "Select patch target to use corresponding KernelPatch version"
 }
