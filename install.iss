@@ -34,6 +34,16 @@ Source: "release\FolkTool-Windows-Release\data\*"; DestDir: "{app}\data"; Flags:
 Source: "bin\*"; DestDir: "{app}\bin"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "assets\icons"
 Source: "kp_versions\*"; DestDir: "{app}\kp_versions"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Optional direct Visual C++ runtime DLLs if bundled in release or redist
+Source: "release\FolkTool-Windows-Release\msvcp140.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "release\FolkTool-Windows-Release\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "release\FolkTool-Windows-Release\vcruntime140_1.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "redist\msvcp140.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "redist\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "redist\vcruntime140_1.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+
+; Optional bundled Visual C++ Redistributable installer
 Source: "redist\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
@@ -52,7 +62,17 @@ var
 function VCRedistNeedsInstall: Boolean;
 var
   Installed: Cardinal;
+  VerStr: String;
 begin
+  // Check if runtime DLLs already exist in Windows System directory
+  if FileExists(ExpandConstant('{sys}\msvcp140.dll')) and
+     FileExists(ExpandConstant('{sys}\vcruntime140_1.dll')) and
+     FileExists(ExpandConstant('{sys}\vcruntime140.dll')) then
+  begin
+    Result := False;
+    Exit;
+  end;
+
   Result := True;
   // Check 64-bit native registry for VC++ 2015-2022 (v14) x64 runtime
   if RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Installed', Installed) then
@@ -63,10 +83,26 @@ begin
       Exit;
     end;
   end;
+  if RegQueryStringValue(HKLM64, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Version', VerStr) then
+  begin
+    if VerStr <> '' then
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
   // Check 32-bit registry hive as fallback
   if RegQueryDWordValue(HKLM32, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Installed', Installed) then
   begin
     if Installed = 1 then
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
+  if RegQueryStringValue(HKLM32, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Version', VerStr) then
+  begin
+    if VerStr <> '' then
     begin
       Result := False;
       Exit;
