@@ -39,7 +39,7 @@ void main() {
       expect(devices[0].serial, 'ABC12345');
       expect(devices[0].state, DeviceState.adb);
       expect(devices[1].serial, 'DEF67890');
-      expect(devices[1].state, DeviceState.unauthorized);
+      expect(devices[1].state, DeviceState.unknown);
     });
 
     test('getFastbootDevices parses fastboot devices', () async {

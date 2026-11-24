@@ -9,11 +9,15 @@ class DeviceInfo {
   final String serial;
   final DeviceState state;
   final String? model;
+  final String? androidVersion;
+  final String? kernelVersion;
 
   DeviceInfo({
     required this.serial,
     required this.state,
     this.model,
+    this.androidVersion,
+    this.kernelVersion,
   });
 
   String get stateText {
