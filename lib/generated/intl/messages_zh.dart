@@ -414,9 +414,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "themeSystem": MessageLookupByLibrary.simpleMessage("跟随系统"),
     "themeLight": MessageLookupByLibrary.simpleMessage("浅色模式"),
     "themeDark": MessageLookupByLibrary.simpleMessage("深色模式"),
-    "copyLogs": MessageLookupByLibrary.simpleMessage("复制日志"),
     "logsCopied": MessageLookupByLibrary.simpleMessage("日志已复制到剪贴板"),
-    "clearLogs": MessageLookupByLibrary.simpleMessage("清空日志"),
     "versionSupportUnpack": MessageLookupByLibrary.simpleMessage("内置解包"),
   };
 }
