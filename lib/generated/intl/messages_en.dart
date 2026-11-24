@@ -543,9 +543,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "themeSystem": MessageLookupByLibrary.simpleMessage("Follow System"),
     "themeLight": MessageLookupByLibrary.simpleMessage("Light Mode"),
     "themeDark": MessageLookupByLibrary.simpleMessage("Dark Mode"),
-    "copyLogs": MessageLookupByLibrary.simpleMessage("Copy Logs"),
     "logsCopied": MessageLookupByLibrary.simpleMessage("Logs copied to clipboard"),
-    "clearLogs": MessageLookupByLibrary.simpleMessage("Clear Logs"),
     "versionSupportUnpack": MessageLookupByLibrary.simpleMessage(
       "Built-in Unpack",
     ),
