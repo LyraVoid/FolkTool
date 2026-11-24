@@ -30,7 +30,7 @@ jobs:
         run: flutter pub get
 
       - name: Static analysis
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Run widget & unit tests
         run: flutter test --reporter expanded

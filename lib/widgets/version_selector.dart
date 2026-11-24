@@ -108,7 +108,7 @@ class VersionSelector extends StatelessWidget {
 
     return DropdownButtonFormField<KpVersion>(
       key: ValueKey(selected),
-      value: selected,
+      initialValue: selected,
       items: items,
       onChanged: (KpVersion? version) async {
         if (version == null) {
