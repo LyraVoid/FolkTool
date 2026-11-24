@@ -30,6 +30,7 @@ FolkTool is a fast Root flashing tool designed specifically for FolkPatch and AP
 ## 📱 Prerequisites
 
 - **Operating System:** Windows 10/11
+- **Runtime:** [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 - **Device:** Android device based on ARM64 architecture with Linux kernel version 3.18 to 6.15
 - **Driver:** Android ADB driver installed
 - **Developer Options:** USB debugging enabled

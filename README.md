@@ -30,6 +30,7 @@ FolkTool 是一个专为 FolkPatch 和 APatch 设计的快速 Root 刷入工具�
 ## 📱 前置要求
 
 - **操作系统：** Windows 10/11
+- **运行环境：** [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 - **设备：** 基于 ARM64 架构且 Linux 内核版本 3.18 至 6.15 的 Android 设备
 - **驱动：** 已安装 Android ADB 驱动
 - **开发者选项：** 已启用 USB 调试
