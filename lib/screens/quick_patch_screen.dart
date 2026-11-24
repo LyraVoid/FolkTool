@@ -124,6 +124,17 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
                     LogConsole(
                       logs: patchProvider.logs,
                       maxHeight: 250,
+                      onExport: () async {
+                        final device = context.read<DeviceProvider>().currentDevice;
+                        final path = await patchProvider.exportDiagnostics(
+                          deviceInfo: device,
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Diagnostics saved: $path')),
+                          );
+                        }
+                      },
                       onClear: patchProvider.isRunning
                           ? null
                           : patchProvider.clearLogs,
@@ -317,6 +328,39 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           ),
+          if (patchProvider.backupFilePath != null) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final deviceProvider = context.read<DeviceProvider>();
+                if (!deviceProvider.hasFastbootDevice) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Connect device in Fastboot mode to restore stock boot.'),
+                    ),
+                  );
+                  return;
+                }
+                final ok = await patchProvider.restoreStockBoot(deviceProvider);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        ok
+                            ? 'Stock boot image restored.'
+                            : 'Failed to restore stock boot image.',
+                      ),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.restore),
+              label: const Text('Restore Stock Boot'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ],
         ],
       );
     }

@@ -69,6 +69,9 @@ class DeviceProvider extends ChangeNotifier {
   bool get driverInstalled => _driverInstalled;
   bool get hasAdbDevice => _adbDevices.isNotEmpty;
   bool get hasFastbootDevice => _fastbootDevices.isNotEmpty;
+  DeviceInfo? get currentDevice => _fastbootDevices.isNotEmpty
+      ? _fastbootDevices.first
+      : (_adbDevices.isNotEmpty ? _adbDevices.first : null);
   
   // 客户端状态 Getters
   ClientInstallStatus get apatchStatus => _apatchStatus;

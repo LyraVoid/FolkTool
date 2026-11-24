@@ -1,0 +1,49 @@
+name: Bug Report
+description: Report a bug or crash in FolkTool
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please export your diagnostic logs from the **Log Console -> Export Logs** button in FolkTool and attach the generated file if possible.
+  - type: input
+    id: app_version
+    attributes:
+      label: FolkTool Version
+      placeholder: e.g. 1.7.0
+    validations:
+      required: true
+  - type: input
+    id: os_version
+    attributes:
+      label: Windows Version
+      placeholder: e.g. Windows 11 23H2
+    validations:
+      required: true
+  - type: input
+    id: device_info
+    attributes:
+      label: Android Device & Kernel Version
+      placeholder: e.g. Pixel 7, Android 14, Kernel 5.10.x
+  - type: dropdown
+    id: patch_target
+    attributes:
+      label: Patch Target
+      options:
+        - FolkPatch
+        - APatch
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the issue and steps to reproduce it.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      render: text

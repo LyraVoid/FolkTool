@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/constants.dart';
+import '../models/models.dart';
 
 class FileService {
   Future<String?> selectBootImage() async {
@@ -127,5 +128,53 @@ class FileService {
     final name = p.basenameWithoutExtension(originalPath);
     final ext = p.extension(originalPath);
     return p.join(dir, '${name}_patched$ext');
+  }
+
+  /// Creates a timestamped backup of the stock boot image before patching.
+  Future<String> backupBootImage(String sourcePath) async {
+    final backupDir = await getBackupDirectory();
+    final timestamp =
+        DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
+    final baseName = p.basenameWithoutExtension(sourcePath);
+    final ext = p.extension(sourcePath);
+    final backupPath = p.join(backupDir, '${baseName}_stock_$timestamp$ext');
+    await File(sourcePath).copy(backupPath);
+    return backupPath;
+  }
+
+  /// Formats a diagnostic report containing app, OS, device, and log details.
+  String buildDiagnosticReport({
+    required List<LogEntry> logs,
+    DeviceInfo? deviceInfo,
+  }) {
+    final buf = StringBuffer()
+      ..writeln('=== FolkTool Diagnostic Report ===')
+      ..writeln('App Version: ${Constants.appVersion}')
+      ..writeln('OS: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}')
+      ..writeln('Generated: ${DateTime.now().toIso8601String()}');
+
+    if (deviceInfo != null) {
+      buf
+        ..writeln('Device Serial: ${deviceInfo.serial}')
+        ..writeln('Device State: ${deviceInfo.state.name}')
+        ..writeln('Device Model: ${deviceInfo.model ?? 'unknown'}')
+        ..writeln('Android Version: ${deviceInfo.androidVersion ?? 'unknown'}')
+        ..writeln('Kernel Version: ${deviceInfo.kernelVersion ?? 'unknown'}');
+    }
+
+    buf.writeln('\n=== Logs (${logs.length}) ===');
+    for (final entry in logs) {
+      buf.writeln(entry.toFormattedString());
+    }
+    return buf.toString();
+  }
+
+  /// Saves a diagnostic report to the logs directory and returns the file path.
+  Future<String> exportDiagnosticBundle({
+    required List<LogEntry> logs,
+    DeviceInfo? deviceInfo,
+  }) async {
+    final report = buildDiagnosticReport(logs: logs, deviceInfo: deviceInfo);
+    return saveLogFile(report);
   }
 }

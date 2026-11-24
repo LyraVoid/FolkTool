@@ -1,17 +1,27 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:process_run/process_run.dart';
 import 'package:path/path.dart' as p;
 import '../config/constants.dart';
 import '../models/device_info.dart';
 import '../generated/l10n.dart';
+import 'process_runner.dart';
+import 'safety_service.dart';
 
 typedef LogCallback = void Function(String line);
 
 class DeviceService {
+  final ProcessRunner _processRunner;
+  final bool _skipBinaryExistsCheck;
+
+  DeviceService({
+    ProcessRunner? processRunner,
+    bool skipBinaryExistsCheck = false,
+  })  : _processRunner = processRunner ?? const DefaultProcessRunner(),
+        _skipBinaryExistsCheck = skipBinaryExistsCheck;
+
   Future<List<DeviceInfo>> getAdbDevices({LogCallback? onLog}) async {
     try {
-      if (!await File(Constants.adbPath).exists()) {
+      if (!_skipBinaryExistsCheck && !await File(Constants.adbPath).exists()) {
         onLog?.call(S.current.errAdbNotExist(Constants.adbPath));
         return [];
       }
@@ -39,7 +49,7 @@ class DeviceService {
 
   Future<List<DeviceInfo>> getFastbootDevices({LogCallback? onLog}) async {
     try {
-      if (!await File(Constants.fastbootPath).exists()) {
+      if (!_skipBinaryExistsCheck && !await File(Constants.fastbootPath).exists()) {
         onLog?.call(S.current.errFastbootNotExist(Constants.fastbootPath));
         return [];
       }
@@ -274,11 +284,7 @@ class DeviceService {
     
     onLog?.call(S.current.logExecuteCmd('adb ${args.join(' ')}'));
     
-    final result = await runExecutableArguments(
-      executable,
-      args,
-      verbose: false,
-    );
+    final result = await _processRunner.run(executable, args);
     
     if (result.stdout.toString().isNotEmpty) {
       onLog?.call(result.stdout.toString().trim());
@@ -298,11 +304,7 @@ class DeviceService {
     
     onLog?.call(S.current.logExecuteCmd('fastboot ${args.join(' ')}'));
     
-    final result = await runExecutableArguments(
-      executable,
-      args,
-      verbose: false,
-    );
+    final result = await _processRunner.run(executable, args);
     
     if (result.stdout.toString().isNotEmpty) {
       onLog?.call(result.stdout.toString().trim());
@@ -368,6 +370,17 @@ class DeviceService {
   /// 安装 APatch
   Future<bool> installAPatch({LogCallback? onLog}) async {
     return installApk(Constants.apatchApkPath, onLog: onLog);
+  }
+
+  /// 查询设备当前电量百分比（ADB 模式下可用）
+  Future<int?> getBatteryLevel({LogCallback? onLog}) async {
+    try {
+      final result = await _runAdb(['shell', 'dumpsys', 'battery'], onLog: onLog);
+      if (result.exitCode != 0) return null;
+      return SafetyService.parseBatteryLevel(result.stdout.toString());
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 安装 FolkPatch

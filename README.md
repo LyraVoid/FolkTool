@@ -1,5 +1,9 @@
 # FolkTool
 
+[![Windows CI](https://github.com/rebeeh/FolkTool/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/rebeeh/FolkTool/actions/workflows/windows-ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/rebeeh/FolkTool?include_prereleases)](https://github.com/rebeeh/FolkTool/releases/latest)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20x64-0078D6.svg)](#)
 
 🌏 **README Language:** [**English**](README_EN.md) / [**中文**](README.md)
 
@@ -40,7 +44,7 @@ FolkTool 是一个专为 FolkPatch 和 APatch 设计的快速 Root 刷入工具�
 
 ### 📦 使用指导
 
-1. **下载安装：** 从 [发布页面](https://github.com/LyraVoid/FolkTool/releases/latest) 下载最新版 FolkTool-Setup.exe
+1. **下载安装：** 从 [发布页面](https://github.com/rebeeh/FolkTool/releases/latest) 下载最新版 FolkTool-Setup.exe 或便携版 ZIP
 
 2. **安装程序：** 运行安装程序，按照向导完成安装
 
@@ -105,9 +109,18 @@ FolkTool 遵循 [GNU General Public License v3 (GPL-3)](http://www.gnu.org/copyl
 ### FolkTool 讨论交流
 
 - Telegram 频道: [@FolkTool](https://t.me/FolkPatch)
-- GitHub Issues: [提交问题](https://github.com/LyraVoid/FolkTool/issues)
+- GitHub Issues: [提交问题](https://github.com/rebeeh/FolkTool/issues)
+- 贡献指南: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📝 更新日志
+
+### v1.7.0 (2026-11-25)
+
+- 新增刷入前安全检查（内核版本范围、电量及二进制完整性校验）
+- 新增刷入前自动备份原始 `boot.img` 及一键恢复支持
+- 在日志控制台新增「导出诊断日志」功能，方便排查与反馈问题
+- 新增应用内更新检查（自动查询最新 GitHub Release）
+- 统一 Inno Setup 安装脚本并完善 Windows CI 自动构建与发布流程
 
 ### v1.0.0 (2026-02-23)
 

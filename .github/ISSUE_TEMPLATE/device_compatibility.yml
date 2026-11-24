@@ -1,0 +1,40 @@
+name: Device Compatibility Report
+description: Report device/kernel compatibility results with FolkTool
+title: "[Device]: "
+labels: ["compatibility"]
+body:
+  - type: input
+    id: device_model
+    attributes:
+      label: Device Model
+      placeholder: e.g. Xiaomi 13 / OnePlus 11
+    validations:
+      required: true
+  - type: input
+    id: android_version
+    attributes:
+      label: Android Version
+      placeholder: e.g. Android 14
+    validations:
+      required: true
+  - type: input
+    id: kernel_version
+    attributes:
+      label: Linux Kernel Version (`uname -r`)
+      placeholder: e.g. 5.15.104-android13
+    validations:
+      required: true
+  - type: dropdown
+    id: status
+    attributes:
+      label: Flashing Result
+      options:
+        - Worked (Quick Patch)
+        - Worked (Step-by-step)
+        - Failed / Bootloop (restored stock boot)
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional Notes
