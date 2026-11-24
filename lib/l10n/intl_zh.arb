@@ -268,7 +268,5 @@
   "themeSystem": "跟随系统",
   "themeLight": "浅色模式",
   "themeDark": "深色模式",
-  "copyLogs": "复制日志",
-  "logsCopied": "日志已复制到剪贴板",
-  "clearLogs": "清空日志"
+  "logsCopied": "日志已复制到剪贴板"
 }

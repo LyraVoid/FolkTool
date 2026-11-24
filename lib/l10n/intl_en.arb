@@ -268,7 +268,5 @@
   "themeSystem": "Follow System",
   "themeLight": "Light Mode",
   "themeDark": "Dark Mode",
-  "copyLogs": "Copy Logs",
-  "logsCopied": "Logs copied to clipboard",
-  "clearLogs": "Clear Logs"
+  "logsCopied": "Logs copied to clipboard"
 }
