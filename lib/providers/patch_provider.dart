@@ -19,10 +19,12 @@ enum PatchOperationState {
 class PatchProvider extends ChangeNotifier {
   final KpToolsService _kptoolsService = KpToolsService();
   final FileService _fileService = FileService();
+  final SafetyService _safetyService = SafetyService();
   final Uuid _uuid = const Uuid();
   
   String? _selectedFilePath;
   String? _patchedFilePath;
+  String? _backupFilePath;
   Set<String> _selectedKpmModules = {};
   List<OperationStep> _steps = [];
   int _currentStepIndex = -1;
@@ -34,6 +36,7 @@ class PatchProvider extends ChangeNotifier {
   
   String? get selectedFilePath => _selectedFilePath;
   String? get patchedFilePath => _patchedFilePath;
+  String? get backupFilePath => _backupFilePath;
   Set<String> get selectedKpmModules => Set.unmodifiable(_selectedKpmModules);
   List<OperationStep> get steps => _steps;
   int get currentStepIndex => _currentStepIndex;
@@ -120,7 +123,24 @@ class PatchProvider extends ChangeNotifier {
     
     try {
       _currentStepIndex = 0;
-      
+
+      final preflight = await _safetyService.runPreflightChecks(
+        bootImagePath: _selectedFilePath!,
+        deviceInfo: deviceProvider.currentDevice,
+      );
+      for (final warning in preflight.warnings) {
+        _addLog(LogLevel.warning, warning);
+      }
+      if (!preflight.passed) {
+        final msg = preflight.errors.join('; ');
+        _addLog(LogLevel.error, msg);
+        _updateStepStatus(0, StepStatus.failed, errorMessage: msg);
+        _operationState = PatchOperationState.failed;
+        _errorMessage = msg;
+        notifyListeners();
+        return;
+      }
+
       _updateStepStatus(0, StepStatus.completed);
       
       if (_isCancelling) {
@@ -143,6 +163,7 @@ class PatchProvider extends ChangeNotifier {
           onLog: (line) => _addLog(LogLevel.info, line),
         );
         if (backupSuccess) {
+          _backupFilePath = backupPath;
           _addLog(LogLevel.success, S.current.logBackupComplete(backupPath));
           _updateStepStatus(1, StepStatus.completed);
         } else {
@@ -150,7 +171,12 @@ class PatchProvider extends ChangeNotifier {
           _updateStepStatus(1, StepStatus.completed);
         }
       } else {
-        _addLog(LogLevel.warning, S.current.logDeviceNotFastboot);
+        try {
+          _backupFilePath = await _fileService.backupBootImage(_selectedFilePath!);
+          _addLog(LogLevel.info, S.current.logBackupComplete(_backupFilePath!));
+        } catch (_) {
+          _addLog(LogLevel.warning, S.current.logDeviceNotFastboot);
+        }
         _updateStepStatus(1, StepStatus.completed);
       }
       
@@ -379,5 +405,31 @@ class PatchProvider extends ChangeNotifier {
   Future<String> exportLogs() async {
     final content = _logs.map((e) => e.toFormattedString()).join('\n');
     return await _fileService.saveLogFile(content);
+  }
+
+  Future<String> exportDiagnostics({DeviceInfo? deviceInfo}) async {
+    return await _fileService.exportDiagnosticBundle(
+      logs: _logs,
+      deviceInfo: deviceInfo,
+    );
+  }
+
+  /// Flashes the backed-up stock boot image back to the device in fastboot mode.
+  Future<bool> restoreStockBoot(DeviceProvider deviceProvider) async {
+    final backupPath = _backupFilePath;
+    if (backupPath == null) {
+      _addLog(LogLevel.error, 'No stock boot backup available to restore.');
+      return false;
+    }
+    _addLog(LogLevel.info, 'Restoring stock boot image from $backupPath...');
+    final ok = await deviceProvider.flashBoot(
+      backupPath,
+      onLog: (line) => _addLog(LogLevel.info, line),
+    );
+    _addLog(
+      ok ? LogLevel.success : LogLevel.error,
+      ok ? 'Stock boot image restored.' : 'Failed to restore stock boot image.',
+    );
+    return ok;
   }
 }

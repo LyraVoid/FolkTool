@@ -8,6 +8,7 @@ class LogConsole extends StatefulWidget {
   final bool autoScroll;
   final double maxHeight;
   final VoidCallback? onClear;
+  final VoidCallback? onExport;
 
   const LogConsole({
     super.key,
@@ -15,6 +16,7 @@ class LogConsole extends StatefulWidget {
     this.autoScroll = true,
     this.maxHeight = 240,
     this.onClear,
+    this.onExport,
   });
 
   @override
@@ -136,6 +138,16 @@ class _LogConsoleState extends State<LogConsole> {
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(),
                   ),
+                  if (widget.onExport != null) ...[
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: Icon(Icons.download_outlined, size: 16, color: Colors.grey[400]),
+                      tooltip: 'Export Logs',
+                      onPressed: widget.onExport,
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                   if (widget.onClear != null) ...[
                     const SizedBox(width: 4),
                     IconButton(
@@ -164,32 +176,34 @@ class _LogConsoleState extends State<LogConsole> {
                     itemCount: widget.logs.length,
                     itemBuilder: (context, index) {
                       final log = widget.logs[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Icon(
-                                _getLogIcon(log.level),
-                                color: _getLogColor(log.level),
-                                size: 13,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: SelectableText(
-                                log.toFormattedString(),
-                                style: TextStyle(
+                      return RepaintBoundary(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Icon(
+                                  _getLogIcon(log.level),
                                   color: _getLogColor(log.level),
-                                  fontSize: 11.5,
-                                  fontFamily: 'Consolas',
-                                  height: 1.35,
+                                  size: 13,
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: SelectableText(
+                                  log.toFormattedString(),
+                                  style: TextStyle(
+                                    color: _getLogColor(log.level),
+                                    fontSize: 11.5,
+                                    fontFamily: 'Consolas',
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },

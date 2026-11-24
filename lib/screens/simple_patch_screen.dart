@@ -131,6 +131,17 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
                     LogConsole(
                       logs: patchProvider.logs,
                       maxHeight: 250,
+                      onExport: () async {
+                        final device = context.read<DeviceProvider>().currentDevice;
+                        final path = await patchProvider.exportDiagnostics(
+                          deviceInfo: device,
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Diagnostics saved: $path')),
+                          );
+                        }
+                      },
                       onClear: patchProvider.isRunning
                           ? null
                           : patchProvider.clearLogs,

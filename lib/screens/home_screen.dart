@@ -21,7 +21,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final FileService _fileService = FileService();
+  final UpdateService _updateService = UpdateService();
   List<String> _recentFiles = [];
+  ReleaseInfo? _availableUpdate;
 
   @override
   void initState() {
@@ -36,6 +38,15 @@ class _HomeScreenState extends State<HomeScreen> {
     deviceProvider.startMonitoring();
 
     await _loadRecentFiles();
+    _checkForUpdates();
+  }
+
+  Future<void> _checkForUpdates() async {
+    final release = await _updateService.checkForUpdate();
+    if (!mounted || release == null) return;
+    setState(() {
+      _availableUpdate = release;
+    });
   }
 
   Future<void> _loadRecentFiles() async {
@@ -149,14 +160,61 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 840),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+      body: Scrollbar(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 840),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_availableUpdate != null) ...[
+                    Card(
+                      color: colorScheme.primaryContainer.withValues(alpha: 0.45),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.system_update_alt,
+                              color: colorScheme.primary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'New version available: ${_availableUpdate!.tagName}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => launchUrl(
+                                Uri.parse(_availableUpdate!.htmlUrl),
+                                mode: LaunchMode.externalApplication,
+                              ),
+                              child: const Text('Download'),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              tooltip: 'Dismiss',
+                              onPressed: () => setState(() {
+                                _availableUpdate = null;
+                              }),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 const DeviceStatusCard(),
                 const ClientCheckCard(),
                 const SizedBox(height: 20),
@@ -178,6 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

@@ -4,9 +4,12 @@ import 'package:path/path.dart' as p;
 import '../models/patch_target.dart';
 
 class Constants {
-  static String get appVersion => '1.7.0';
+  static const String appVersion =
+      String.fromEnvironment('APP_VERSION', defaultValue: '1.7.0');
   static String get appName => 'FolkTool';
   static String get appFullName => 'FolkTool - KernelPatch 自动刷入工具';
+  static const String githubRepoOwner = 'rebeeh';
+  static const String githubRepoName = 'FolkTool';
   
   static String get _exeDir => File(Platform.resolvedExecutable).parent.path;
   

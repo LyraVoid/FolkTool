@@ -212,6 +212,17 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
         LogConsole(
           logs: patchProvider.logs,
           maxHeight: 220,
+          onExport: () async {
+            final device = context.read<DeviceProvider>().currentDevice;
+            final path = await patchProvider.exportDiagnostics(
+              deviceInfo: device,
+            );
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Diagnostics saved: $path')),
+              );
+            }
+          },
           onClear: patchProvider.isRunning ? null : patchProvider.clearLogs,
         ),
       ],
