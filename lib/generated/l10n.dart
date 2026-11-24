@@ -2169,31 +2169,11 @@ class S {
     );
   }
 
-  /// `Copy Logs`
-  String get copyLogs {
-    return Intl.message(
-      'Copy Logs',
-      name: 'copyLogs',
-      desc: '',
-      args: [],
-    );
-  }
-
   /// `Logs copied to clipboard`
   String get logsCopied {
     return Intl.message(
       'Logs copied to clipboard',
       name: 'logsCopied',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Clear Logs`
-  String get clearLogs {
-    return Intl.message(
-      'Clear Logs',
-      name: 'clearLogs',
       desc: '',
       args: [],
     );
