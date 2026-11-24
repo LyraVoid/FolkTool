@@ -239,8 +239,17 @@ Win32Window::MessageHandler(HWND hwnd,
       HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
       UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
       double scale_factor = dpi / 96.0;
-      min_max_info->ptMinTrackSize.x = Scale(420, scale_factor);
-      min_max_info->ptMinTrackSize.y = Scale(560, scale_factor);
+      LONG min_width = Scale(420, scale_factor);
+      LONG min_height = Scale(560, scale_factor);
+      MONITORINFO monitor_info{};
+      monitor_info.cbSize = sizeof(MONITORINFO);
+      if (GetMonitorInfo(monitor, &monitor_info)) {
+        const RECT& work = monitor_info.rcWork;
+        min_width = (std::min)(min_width, work.right - work.left);
+        min_height = (std::min)(min_height, work.bottom - work.top);
+      }
+      min_max_info->ptMinTrackSize.x = min_width;
+      min_max_info->ptMinTrackSize.y = min_height;
       return 0;
     }
 
