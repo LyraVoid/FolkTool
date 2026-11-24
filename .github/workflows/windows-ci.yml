@@ -1,0 +1,167 @@
+name: Windows CI & Installer Verification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Build, Test & Verify Windows Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze
+
+      - name: Run widget & unit tests
+        run: flutter test --reporter expanded
+
+      - name: Build Windows Release
+        run: flutter build windows --release
+
+      - name: Verify VC++ Redistributable download URL
+        shell: pwsh
+        run: |
+          $url = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+          $response = Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5 -UseBasicParsing
+          if ($response.StatusCode -lt 200 -or $response.StatusCode -ge 400) {
+            throw "VC++ Redistributable URL check failed with status $($response.StatusCode)"
+          }
+          Write-Host "VC++ Redistributable URL reachable (HTTP $($response.StatusCode))"
+
+      - name: Ensure Inno Setup 6 is installed
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe not found after installation."
+          }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Compile installer.iss
+        shell: pwsh
+        run: |
+          & "$env:ISCC" installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "installer.iss compilation failed" }
+          if (-not (Test-Path "installer\FolkTool-Setup.exe")) {
+            throw "Expected output installer\FolkTool-Setup.exe not found"
+          }
+
+      - name: Stage release folder and compile install.iss
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "release\FolkTool-Windows-Release" | Out-Null
+          Copy-Item -Recurse -Force "build\windows\x64\runner\Release\*" "release\FolkTool-Windows-Release\"
+          & "$env:ISCC" install.iss
+          if ($LASTEXITCODE -ne 0) { throw "install.iss compilation failed" }
+          if (-not (Test-Path "release\FolkTool-Setup-v1.7.0.exe")) {
+            throw "Expected output release\FolkTool-Setup-v1.7.0.exe not found"
+          }
+
+      - name: Smoke test silent install, app launch, and uninstall
+        shell: pwsh
+        run: |
+          Write-Host "Installing FolkTool-Setup.exe silently..."
+          $installProc = Start-Process -FilePath "installer\FolkTool-Setup.exe" `
+            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" `
+            -Wait -PassThru
+          if ($installProc.ExitCode -ne 0) {
+            throw "Silent installer exited with code $($installProc.ExitCode)"
+          }
+
+          $installDir = "C:\Program Files\FolkTool"
+          $exePath = Join-Path $installDir "FolkTool.exe"
+          $requiredPaths = @(
+            $exePath,
+            (Join-Path $installDir "flutter_windows.dll"),
+            (Join-Path $installDir "bin\kptools.exe"),
+            (Join-Path $installDir "kp_versions\folkpatch\kpimg")
+          )
+          foreach ($p in $requiredPaths) {
+            if (-not (Test-Path $p)) {
+              throw "Missing installed file: $p"
+            }
+          }
+
+          Write-Host "Launching installed FolkTool.exe..."
+          $appProc = Start-Process -FilePath $exePath -PassThru
+          Start-Sleep -Seconds 4
+          if ($appProc.HasExited) {
+            throw "FolkTool.exe exited prematurely with code $($appProc.ExitCode)"
+          }
+          Write-Host "FolkTool.exe running (PID=$($appProc.Id), Title='$($appProc.MainWindowTitle)')"
+          Stop-Process -Id $appProc.Id -Force
+
+          Write-Host "Uninstalling FolkTool silently..."
+          $uninstaller = Join-Path $installDir "unins000.exe"
+          if (Test-Path $uninstaller) {
+            $uninstProc = Start-Process -FilePath $uninstaller `
+              -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" `
+              -Wait -PassThru
+            if ($uninstProc.ExitCode -ne 0) {
+              throw "Uninstaller exited with code $($uninstProc.ExitCode)"
+            }
+          }
+
+      - name: Package Portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "artifacts\portable" | Out-Null
+          Copy-Item -Recurse -Force "build\windows\x64\runner\Release\*" "artifacts\portable\"
+          Copy-Item -Recurse -Force "bin" "artifacts\portable\bin"
+          Copy-Item -Recurse -Force "assets" "artifacts\portable\assets"
+          Copy-Item -Recurse -Force "kp_versions" "artifacts\portable\kp_versions"
+          Compress-Archive -Path "artifacts\portable\*" -DestinationPath "artifacts\FolkTool-Windows-Portable.zip" -Force
+
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolkTool-Setup-Windows
+          path: installer/FolkTool-Setup.exe
+          if-no-files-found: error
+
+      - name: Upload Portable ZIP Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolkTool-Windows-Portable
+          path: artifacts/FolkTool-Windows-Portable.zip
+          if-no-files-found: error
+
+      - name: Write Job Summary
+        shell: pwsh
+        run: |
+          $setupSizeMB = [math]::Round((Get-Item "installer\FolkTool-Setup.exe").Length / 1MB, 2)
+          $zipSizeMB = [math]::Round((Get-Item "artifacts\FolkTool-Windows-Portable.zip").Length / 1MB, 2)
+          @"
+          ## Windows CI Verification Summary
+          - **Static Analysis (`flutter analyze`)**: Passed
+          - **Widget Tests (`flutter test`)**: Passed
+          - **Windows Release Build**: Passed (`FolkTool.exe`)
+          - **Inno Setup Scripts**: `installer.iss` and `install.iss` both compiled cleanly
+          - **Silent Install -> Launch -> Uninstall Smoke Test**: Passed
+          - **Artifacts**:
+            - `FolkTool-Setup.exe` ($setupSizeMB MB)
+            - `FolkTool-Windows-Portable.zip` ($zipSizeMB MB)
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

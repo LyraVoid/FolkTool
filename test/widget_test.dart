@@ -1,0 +1,113 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:FolkTool/config/app_theme.dart';
+import 'package:FolkTool/generated/l10n.dart';
+import 'package:FolkTool/models/models.dart';
+import 'package:FolkTool/models/patch_target.dart';
+import 'package:FolkTool/providers/providers.dart';
+import 'package:FolkTool/widgets/widgets.dart';
+
+Widget _wrapWithApp({
+  required Widget child,
+  ThemeMode themeMode = ThemeMode.light,
+  Locale locale = const Locale('en'),
+  ThemeProvider? themeProvider,
+  VersionProvider? versionProvider,
+}) {
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider(create: (_) => LocaleProvider()),
+      ChangeNotifierProvider(create: (_) => themeProvider ?? ThemeProvider()),
+      ChangeNotifierProvider(create: (_) => versionProvider ?? VersionProvider()),
+    ],
+    child: MaterialApp(
+      locale: locale,
+      themeMode: themeMode,
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      localizationsDelegates: const [
+        S.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('zh'),
+        Locale('en'),
+      ],
+      home: Scaffold(body: child),
+    ),
+  );
+}
+
+void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('ThemeProvider switches between system, light, and dark modes',
+      (tester) async {
+    final provider = ThemeProvider();
+    expect(provider.themeMode, ThemeMode.system);
+
+    await provider.setThemeMode(ThemeMode.dark);
+    expect(provider.themeMode, ThemeMode.dark);
+
+    await provider.setThemeMode(ThemeMode.light);
+    expect(provider.themeMode, ThemeMode.light);
+  });
+
+  testWidgets('PatchTargetSelector renders SegmentedButton and switches target',
+      (tester) async {
+    final versionProvider = VersionProvider();
+
+    await tester.pumpWidget(
+      _wrapWithApp(
+        versionProvider: versionProvider,
+        child: const PatchTargetSelector(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SegmentedButton<PatchTarget>), findsOneWidget);
+    expect(find.text('FolkPatch'), findsOneWidget);
+    expect(find.text('APatch'), findsOneWidget);
+
+    await tester.tap(find.text('APatch'));
+    await tester.pumpAndSettle();
+    expect(versionProvider.currentTarget, PatchTarget.apatch);
+  });
+
+  testWidgets('LogConsole renders logs and triggers onClear', (tester) async {
+    var cleared = false;
+    final logs = [
+      LogEntry(
+        timestamp: DateTime(2026, 1, 1, 12, 0, 0),
+        level: LogLevel.info,
+        message: 'Test log entry',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _wrapWithApp(
+        themeMode: ThemeMode.dark,
+        child: LogConsole(
+          logs: logs,
+          onClear: () => cleared = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Test log entry'), findsOneWidget);
+    expect(find.byIcon(Icons.copy_all), findsOneWidget);
+    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.delete_outline));
+    await tester.pump();
+    expect(cleared, isTrue);
+  });
+}
