@@ -112,6 +112,10 @@ jobs:
           if ($installProc.ExitCode -ne 0) {
             throw "Silent installer exited with code $($installProc.ExitCode)"
           }
+          if (Test-Path $logPath) {
+            Write-Host "=== Installer Log Highlights ==="
+            Select-String -Path $logPath -Pattern "vc_redist|Run|Error|Exception" | ForEach-Object { $_.Line }
+          }
 
           $installDir = "C:\Program Files\FolkTool"
           $exePath = Join-Path $installDir "FolkTool.exe"
