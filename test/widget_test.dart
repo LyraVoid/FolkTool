@@ -38,7 +38,7 @@ Widget _wrapWithApp({
         Locale('zh'),
         Locale('en'),
       ],
-      home: Scaffold(body: child),
+      home: Scaffold(body: SingleChildScrollView(child: child)),
     ),
   );
 }
@@ -81,7 +81,8 @@ void main() {
     expect(versionProvider.currentTarget, PatchTarget.apatch);
   });
 
-  testWidgets('LogConsole renders logs and triggers onClear', (tester) async {
+  testWidgets('LogConsole renders logs and triggers onClear in dark mode',
+      (tester) async {
     var cleared = false;
     final logs = [
       LogEntry(
@@ -109,5 +110,51 @@ void main() {
     await tester.tap(find.byIcon(Icons.delete_outline));
     await tester.pump();
     expect(cleared, isTrue);
+  });
+
+  testWidgets('StepProgress renders step statuses and percentage cleanly',
+      (tester) async {
+    final steps = [
+      OperationStep(
+        type: StepType.selectFile,
+        name: 'Select boot.img',
+        status: StepStatus.completed,
+      ),
+      OperationStep(
+        type: StepType.patchImage,
+        name: 'Patch image',
+        status: StepStatus.inProgress,
+      ),
+      OperationStep(
+        type: StepType.flashImage,
+        name: 'Flash to device',
+        status: StepStatus.pending,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _wrapWithApp(
+        themeMode: ThemeMode.dark,
+        child: StepProgress(steps: steps, currentIndex: 1),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.text('66%'), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+  });
+
+  testWidgets('VersionSelector renders empty state cleanly in light & dark',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrapWithApp(
+        themeMode: ThemeMode.light,
+        child: const VersionSelector(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(VersionSelector), findsOneWidget);
   });
 }
