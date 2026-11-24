@@ -11,12 +11,9 @@ class VersionSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -24,7 +21,7 @@ class VersionSelector extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.settings_system_daydream, color: Colors.purple[600]),
+                Icon(Icons.settings_system_daydream, color: colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
@@ -33,16 +30,16 @@ class VersionSelector extends StatelessWidget {
                       Text(
                         l10n.kernelPatchVersion,
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[800],
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurface,
                         ),
                       ),
                       Text(
                         l10n.selectVersionDesc,
                         style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[600],
+                          fontSize: 11.5,
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -61,11 +58,11 @@ class VersionSelector extends StatelessWidget {
                     ),
                   );
                 }
-                
+
                 if (versionProvider.availableVersions.isEmpty) {
                   return _buildNoVersions(context);
                 }
-                
+
                 return _buildVersionDropdown(context, versionProvider);
               },
             ),
@@ -74,15 +71,14 @@ class VersionSelector extends StatelessWidget {
       ),
     );
   }
-  
-  Widget _buildVersionDropdown(BuildContext context, VersionProvider versionProvider) {
+
+  Widget _buildVersionDropdown(
+      BuildContext context, VersionProvider versionProvider) {
     final l10n = S.of(context);
     final selected = versionProvider.selectedVersion;
 
-    // 构建菜单项列表
     final items = <DropdownMenuItem<KpVersion>>[];
 
-    // 添加预设版本
     for (final version in versionProvider.availableVersions) {
       items.add(DropdownMenuItem<KpVersion>(
         value: version,
@@ -90,7 +86,6 @@ class VersionSelector extends StatelessWidget {
       ));
     }
 
-    // 如果当前选择的是自定义版本，添加到列表中
     if (selected?.isCustom == true) {
       items.add(DropdownMenuItem<KpVersion>(
         value: selected,
@@ -98,7 +93,6 @@ class VersionSelector extends StatelessWidget {
       ));
     }
 
-    // 只有当没有选择自定义版本时，才添加"添加自定义"选项
     if (selected?.isCustom != true) {
       items.add(DropdownMenuItem<KpVersion>(
         value: null,
@@ -106,24 +100,14 @@ class VersionSelector extends StatelessWidget {
           children: [
             Icon(Icons.add_circle_outline, color: Colors.orange[600], size: 18),
             const SizedBox(width: 8),
-            Text(l10n.customVersion, style: TextStyle(fontSize: 13)),
+            Text(l10n.customVersion, style: const TextStyle(fontSize: 13)),
           ],
         ),
       ));
     }
 
     return DropdownButtonFormField<KpVersion>(
-      value: selected,
-      decoration: InputDecoration(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
-        ),
-      ),
+      initialValue: selected,
       items: items,
       onChanged: (KpVersion? version) async {
         if (version == null) {
@@ -134,36 +118,40 @@ class VersionSelector extends StatelessWidget {
       },
     );
   }
-  
+
   Widget _buildVersionItem(BuildContext context, KpVersion version) {
     final l10n = S.of(context);
     if (version.isCustom) {
-      return Text(l10n.versionCustom, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500));
+      return Text(
+        l10n.versionCustom,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+      );
     }
     return Text(
       '${version.source.displayName} ${version.version}',
-      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
     );
   }
-  
+
   Widget _buildNoVersions(BuildContext context) {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.red[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.red[200]!),
+        color: colorScheme.errorContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colorScheme.error.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline, color: Colors.red[600], size: 18),
+          Icon(Icons.error_outline, color: colorScheme.error, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               l10n.noVersionsAvailable,
-              style: TextStyle(fontSize: 12, color: Colors.red[700]),
+              style: TextStyle(fontSize: 12, color: colorScheme.onErrorContainer),
             ),
           ),
           TextButton(
@@ -177,32 +165,30 @@ class VersionSelector extends StatelessWidget {
       ),
     );
   }
-  
+
   Future<void> _selectCustomVersion(
     BuildContext context,
     VersionProvider versionProvider,
   ) async {
     final l10n = S.of(context);
-    
+
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
       dialogTitle: l10n.selectCustomVersion,
     );
-    
+
     if (result != null && result.files.single.path != null) {
       final filePath = result.files.single.path!;
       final success = await versionProvider.selectCustomVersion(filePath);
-      
+
       if (context.mounted) {
-        if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.customVersionSaved)),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.invalidVersionFile)),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success ? l10n.customVersionSaved : l10n.invalidVersionFile,
+            ),
+          ),
+        );
       }
     }
   }

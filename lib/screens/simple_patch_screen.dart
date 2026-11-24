@@ -28,16 +28,10 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
   Future<void> _selectFile() async {
     final path = await _fileService.selectBootImage();
-    if (path != null) {
-      final patchProvider = context.read<PatchProvider>();
-      patchProvider.setSelectedFile(path);
+    if (path != null && mounted) {
+      context.read<PatchProvider>().setSelectedFile(path);
     }
   }
 
@@ -72,11 +66,12 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
       patchProvider.patchedFilePath!,
     );
 
+    if (!mounted) return;
     setState(() {
       _isSaving = false;
     });
 
-    if (savedPath != null && mounted) {
+    if (savedPath != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.fileSavedSuccessfully),
@@ -106,8 +101,6 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.simplePatch),
-            centerTitle: true,
-            elevation: 0,
             actions: [
               if (patchProvider.logs.isNotEmpty)
                 IconButton(
@@ -119,24 +112,32 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
           ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const PatchTargetSelector(),
-                const SizedBox(height: 16),
-                const VersionSelector(),
-                const SizedBox(height: 16),
-                _buildFileSelector(patchProvider),
-                const SizedBox(height: 16),
-                _buildKpmModuleSelector(patchProvider),
-                const SizedBox(height: 24),
-                _buildActionButtons(patchProvider),
-                const SizedBox(height: 24),
-                LogConsole(
-                  logs: patchProvider.logs,
-                  maxHeight: 250,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 840),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const PatchTargetSelector(),
+                    const SizedBox(height: 16),
+                    const VersionSelector(),
+                    const SizedBox(height: 16),
+                    _buildFileSelector(patchProvider),
+                    const SizedBox(height: 16),
+                    _buildKpmModuleSelector(patchProvider),
+                    const SizedBox(height: 20),
+                    _buildActionButtons(patchProvider),
+                    const SizedBox(height: 20),
+                    LogConsole(
+                      logs: patchProvider.logs,
+                      maxHeight: 250,
+                      onClear: patchProvider.isRunning
+                          ? null
+                          : patchProvider.clearLogs,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         );
@@ -146,12 +147,9 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
 
   Widget _buildFileSelector(PatchProvider patchProvider) {
     final l10n = S.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -159,14 +157,15 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.insert_drive_file, color: Colors.orange[600]),
+                Icon(Icons.insert_drive_file_outlined,
+                    color: colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   l10n.selectBootImage,
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[800],
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
                   ),
                 ),
               ],
@@ -174,34 +173,37 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
             const SizedBox(height: 12),
             InkWell(
               onTap: patchProvider.isRunning ? null : _selectFile,
+              borderRadius: BorderRadius.circular(10),
               child: Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[300]!),
+                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colorScheme.outlineVariant),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.folder_open,
-                      color: Colors.grey[600],
+                      color: colorScheme.onSurfaceVariant,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        patchProvider.selectedFilePath ?? l10n.clickToSelectFile,
+                        patchProvider.selectedFilePath ??
+                            l10n.clickToSelectFile,
                         style: TextStyle(
                           fontSize: 13,
                           color: patchProvider.selectedFilePath != null
-                              ? Colors.grey[800]
-                              : Colors.grey[500],
+                              ? colorScheme.onSurface
+                              : colorScheme.onSurfaceVariant,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (patchProvider.selectedFilePath != null)
-                      Icon(Icons.check_circle, color: Colors.green[600], size: 20),
+                      const Icon(Icons.check_circle,
+                          color: Colors.green, size: 20),
                   ],
                 ),
               ),
@@ -214,24 +216,19 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
 
   Widget _buildActionButtons(PatchProvider patchProvider) {
     final l10n = S.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
 
     if (patchProvider.isRunning) {
-      return ElevatedButton.icon(
+      return FilledButton.icon(
         onPressed: null,
         icon: const SizedBox(
           width: 18,
           height: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Colors.white,
-          ),
+          child: CircularProgressIndicator(strokeWidth: 2),
         ),
         label: Text(l10n.patching),
-        style: ElevatedButton.styleFrom(
+        style: FilledButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
         ),
       );
     }
@@ -243,13 +240,13 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.green[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.green[200]!),
+              color: Colors.green.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.green[600]),
+                const Icon(Icons.check_circle, color: Colors.green),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -259,8 +256,8 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
                         l10n.patchOnlyComplete,
                         style: TextStyle(
                           fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.green[800],
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurface,
                         ),
                       ),
                       if (patchProvider.patchedFilePath != null)
@@ -268,7 +265,7 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
                           patchProvider.patchedFilePath!,
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[600],
+                            color: colorScheme.onSurfaceVariant,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -283,39 +280,28 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    patchProvider.reset();
-                  },
+                  onPressed: patchProvider.reset,
                   icon: const Icon(Icons.refresh),
                   label: Text(l10n.restart),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: ElevatedButton.icon(
+                child: FilledButton.icon(
                   onPressed: _isSaving ? null : _savePatchedFile,
                   icon: _isSaving
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.save),
                   label: Text(l10n.savePatchedFile),
-                  style: ElevatedButton.styleFrom(
+                  style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
                   ),
                 ),
               ),
@@ -332,23 +318,23 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.red[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red[200]!),
+              color: colorScheme.errorContainer.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: colorScheme.error.withValues(alpha: 0.4)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(Icons.error, color: Colors.red[600]),
+                    Icon(Icons.error, color: colorScheme.error),
                     const SizedBox(width: 12),
                     Text(
                       l10n.operationFailed,
                       style: TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.red[800],
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onErrorContainer,
                       ),
                     ),
                   ],
@@ -359,7 +345,7 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
                     patchProvider.errorMessage!,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.red[700],
+                      color: colorScheme.onErrorContainer,
                     ),
                   ),
                 ],
@@ -367,39 +353,31 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () {
-              patchProvider.reset();
-            },
+          FilledButton.icon(
+            onPressed: patchProvider.reset,
             icon: const Icon(Icons.refresh),
             label: Text(l10n.retry),
-            style: ElevatedButton.styleFrom(
+            style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
             ),
           ),
         ],
       );
     }
 
-    return ElevatedButton.icon(
+    return FilledButton.icon(
       onPressed: patchProvider.selectedFilePath == null ? null : _startPatch,
       icon: const Icon(Icons.build),
       label: Text(l10n.startPatch),
-      style: ElevatedButton.styleFrom(
+      style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
       ),
     );
   }
 
   Future<void> _selectKpmModules() async {
     final modules = await _fileService.selectKpmModules();
-    if (modules.isNotEmpty) {
+    if (modules.isNotEmpty && mounted) {
       final patchProvider = context.read<PatchProvider>();
       final currentModules = Set<String>.from(patchProvider.selectedKpmModules);
       currentModules.addAll(modules);
@@ -409,13 +387,10 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
 
   Widget _buildKpmModuleSelector(PatchProvider patchProvider) {
     final l10n = S.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
     final modules = patchProvider.selectedKpmModules.toList();
 
     return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -423,30 +398,32 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.inventory_2, color: Colors.purple[600]),
+                Icon(Icons.inventory_2_outlined,
+                    color: colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   l10n.kpmModules,
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[800],
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 if (modules.isNotEmpty) ...[
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.purple[100],
+                      color: colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       '${modules.length}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.purple[900],
-                        fontWeight: FontWeight.w500,
+                        color: colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -456,11 +433,8 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
                   TextButton(
                     onPressed: patchProvider.isRunning
                         ? null
-                        : () => patchProvider.clearKpmModules(),
-                    child: Text(
-                      l10n.clearAllModules,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
+                        : patchProvider.clearKpmModules,
+                    child: Text(l10n.clearAllModules),
                   ),
               ],
             ),
@@ -468,21 +442,26 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
             if (modules.isEmpty)
               InkWell(
                 onTap: patchProvider.isRunning ? null : _selectKpmModules,
+                borderRadius: BorderRadius.circular(10),
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[300]!),
-                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: colorScheme.outlineVariant),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.add_circle_outline, color: Colors.grey[400], size: 20),
+                        Icon(Icons.add_circle_outline,
+                            color: colorScheme.onSurfaceVariant, size: 20),
                         const SizedBox(width: 8),
                         Text(
                           l10n.selectKpmModules,
-                          style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -502,17 +481,22 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.purple[50],
+                                color: colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.45),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.insert_drive_file, size: 16, color: Colors.purple[600]),
+                                  Icon(Icons.insert_drive_file_outlined,
+                                      size: 16, color: colorScheme.primary),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       fileName,
-                                      style: TextStyle(fontSize: 12, color: Colors.grey[800]),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: colorScheme.onSurface,
+                                      ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
@@ -522,27 +506,27 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
                           ),
                           const SizedBox(width: 8),
                           IconButton(
-                            icon: Icon(Icons.close, size: 18, color: Colors.grey[600]),
+                            icon: Icon(Icons.close,
+                                size: 18, color: colorScheme.onSurfaceVariant),
                             onPressed: patchProvider.isRunning
                                 ? null
                                 : () => patchProvider.removeKpmModule(path),
                             tooltip: l10n.removeModule,
-                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            constraints: const BoxConstraints(
+                                minWidth: 32, minHeight: 32),
                             padding: EdgeInsets.zero,
                           ),
                         ],
                       ),
                     );
-                  }).toList(),
+                  }),
                   const SizedBox(height: 4),
                   Center(
                     child: TextButton.icon(
-                      onPressed: patchProvider.isRunning ? null : _selectKpmModules,
-                      icon: Icon(Icons.add, size: 16),
+                      onPressed:
+                          patchProvider.isRunning ? null : _selectKpmModules,
+                      icon: const Icon(Icons.add, size: 16),
                       label: Text(l10n.selectKpmModules),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.purple[600],
-                      ),
                     ),
                   ),
                 ],

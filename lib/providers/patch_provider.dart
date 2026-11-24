@@ -75,6 +75,11 @@ class PatchProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearLogs() {
+    _logs.clear();
+    notifyListeners();
+  }
+
   void _addLog(LogLevel level, String message) {
     final entry = LogEntry(
       timestamp: DateTime.now(),

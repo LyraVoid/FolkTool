@@ -28,16 +28,10 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
   Future<void> _selectFile() async {
     final path = await _fileService.selectBootImage();
-    if (path != null) {
-      final patchProvider = context.read<PatchProvider>();
-      patchProvider.setSelectedFile(path);
+    if (path != null && mounted) {
+      context.read<PatchProvider>().setSelectedFile(path);
     }
   }
 
@@ -65,14 +59,12 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = S.of(context);
-    
+
     return Consumer2<PatchProvider, DeviceProvider>(
       builder: (context, patchProvider, deviceProvider, child) {
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.stepOperation),
-            centerTitle: true,
-            elevation: 0,
             actions: [
               IconButton(
                 icon: const Icon(Icons.refresh),
@@ -96,13 +88,18 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
           ),
           body: Column(
             children: [
-              _buildStepIndicator(),
+              _buildStepIndicator(context),
               Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: _buildCurrentStep(patchProvider, deviceProvider),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 840),
+                      child: _buildCurrentStep(patchProvider, deviceProvider),
+                    ),
+                  ),
+                ),
               ),
-            ),
             ],
           ),
         );
@@ -110,42 +107,53 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
     );
   }
 
-  Widget _buildStepIndicator() {
+  Widget _buildStepIndicator(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+        color: colorScheme.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(color: colorScheme.outlineVariant),
+        ),
       ),
-      child: Row(
-        children: List.generate(4, (index) {
-          final isActive = index == _currentStep;
-          final isCompleted = index < _currentStep;
-          
-          return Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isCompleted || isActive
-                          ? Theme.of(context).primaryColor
-                          : Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 840),
+          child: Row(
+            children: List.generate(4, (index) {
+              final isActive = index == _currentStep;
+              final isCompleted = index < _currentStep;
+
+              return Expanded(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isCompleted || isActive
+                              ? colorScheme.primary
+                              : colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                     ),
-                  ),
+                    if (index < 3) const SizedBox(width: 8),
+                  ],
                 ),
-                if (index < 3) const SizedBox(width: 8),
-              ],
-            ),
-          );
-        }),
+              );
+            }),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildCurrentStep(PatchProvider patchProvider, DeviceProvider deviceProvider) {
+  Widget _buildCurrentStep(
+      PatchProvider patchProvider, DeviceProvider deviceProvider) {
     switch (_currentStep) {
       case 0:
         return _buildStep1(patchProvider);
@@ -162,9 +170,9 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
 
   Widget _buildStep1(PatchProvider patchProvider) {
     final l10n = S.of(context);
-    
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildStepTitle(l10n.step1, l10n.step1Desc),
         const SizedBox(height: 20),
@@ -175,38 +183,45 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
         _buildFileSelector(patchProvider),
         const SizedBox(height: 16),
         _buildKpmModuleSelector(patchProvider),
-        const SizedBox(height: 24),
-        ElevatedButton.icon(
-          onPressed: patchProvider.isRunning || patchProvider.selectedFilePath == null
-              ? null
-              : () async {
-                  final versionProvider = context.read<VersionProvider>();
-                  final success = await patchProvider.patchOnly(versionProvider);
-                  if (success && mounted) {
-                    _nextStep();
-                  }
-                },
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed:
+              patchProvider.isRunning || patchProvider.selectedFilePath == null
+                  ? null
+                  : () async {
+                      final versionProvider = context.read<VersionProvider>();
+                      final success =
+                          await patchProvider.patchOnly(versionProvider);
+                      if (success && mounted) {
+                        _nextStep();
+                      }
+                    },
           icon: patchProvider.isRunning
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.build),
           label: Text(patchProvider.isRunning ? l10n.patching : l10n.startPatch),
-          style: ElevatedButton.styleFrom(
+          style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
           ),
         ),
-        const SizedBox(height: 24),
-        LogConsole(logs: patchProvider.logs, maxHeight: 200),
+        const SizedBox(height: 20),
+        LogConsole(
+          logs: patchProvider.logs,
+          maxHeight: 220,
+          onClear: patchProvider.isRunning ? null : patchProvider.clearLogs,
+        ),
       ],
     );
   }
 
   Widget _buildStep2(PatchProvider patchProvider) {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -220,14 +235,14 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green[600]),
+                    const Icon(Icons.check_circle, color: Colors.green),
                     const SizedBox(width: 8),
-                     Text(
-                       l10n.patchedFile,
-                       style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[800],
+                    Text(
+                      l10n.patchedFile,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                   ],
@@ -237,7 +252,7 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
                   patchProvider.patchedFilePath ?? l10n.unknown,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: colorScheme.onSurfaceVariant,
                     fontFamily: 'Consolas',
                   ),
                 ),
@@ -246,27 +261,28 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
           ),
         ),
         const SizedBox(height: 24),
-         Row(
-           children: [
-             OutlinedButton(
-               onPressed: _prevStep,
-               child: Text(l10n.previousStep),
-             ),
-             const SizedBox(width: 16),
-             ElevatedButton.icon(
-               onPressed: () => _nextStep(),
-               icon: const Icon(Icons.arrow_forward),
-               label: Text(l10n.nextStep),
-             ),
-           ],
-         ),
+        Row(
+          children: [
+            OutlinedButton(
+              onPressed: _prevStep,
+              child: Text(l10n.previousStep),
+            ),
+            const SizedBox(width: 16),
+            FilledButton.icon(
+              onPressed: _nextStep,
+              icon: const Icon(Icons.arrow_forward),
+              label: Text(l10n.nextStep),
+            ),
+          ],
+        ),
       ],
     );
   }
 
   Widget _buildStep3(DeviceProvider deviceProvider) {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -275,7 +291,7 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
         const DeviceStatusCard(showRefreshButton: true),
         const SizedBox(height: 24),
         if (deviceProvider.hasAdbDevice) ...[
-          ElevatedButton.icon(
+          FilledButton.icon(
             onPressed: deviceProvider.isChecking
                 ? null
                 : () async {
@@ -296,22 +312,23 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.orange[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange[200]!),
+              color: Colors.orange.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(Icons.info, color: Colors.orange[600]),
+                    const Icon(Icons.info, color: Colors.orange),
                     const SizedBox(width: 8),
                     Text(
                       l10n.manuallyEnterFastboot,
                       style: TextStyle(
                         fontSize: 13,
-                        color: Colors.orange[800],
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                   ],
@@ -319,34 +336,36 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
                 const SizedBox(height: 8),
                 Text(
                   l10n.manuallyEnterFastbootDesc,
-                  style: TextStyle(fontSize: 12, color: Colors.orange[700]),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: deviceProvider.hasFastbootDevice ? () => _nextStep() : null,
+          FilledButton.icon(
+            onPressed:
+                deviceProvider.hasFastbootDevice ? _nextStep : null,
             icon: const Icon(Icons.arrow_forward),
             label: Text(l10n.deviceInFastboot),
           ),
         ],
         const SizedBox(height: 24),
-        Row(
-          children: [
-            OutlinedButton(
-              onPressed: _prevStep,
-              child: Text(l10n.previousStep),
-            ),
-          ],
+        OutlinedButton(
+          onPressed: _prevStep,
+          child: Text(l10n.previousStep),
         ),
       ],
     );
   }
 
-  Widget _buildStep4(PatchProvider patchProvider, DeviceProvider deviceProvider) {
+  Widget _buildStep4(
+      PatchProvider patchProvider, DeviceProvider deviceProvider) {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -360,14 +379,14 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.phone_android, color: Colors.blue[600]),
+                    Icon(Icons.phone_android, color: colorScheme.primary),
                     const SizedBox(width: 8),
-                     Text(
-                       l10n.flashFile,
-                       style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[800],
+                    Text(
+                      l10n.flashFile,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                   ],
@@ -377,7 +396,7 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
                   patchProvider.patchedFilePath ?? l10n.unknown,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: colorScheme.onSurfaceVariant,
                     fontFamily: 'Consolas',
                   ),
                 ),
@@ -387,25 +406,25 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
         ),
         const SizedBox(height: 24),
         if (deviceProvider.hasFastbootDevice) ...[
-          ElevatedButton.icon(
+          FilledButton.icon(
             onPressed: patchProvider.isRunning
                 ? null
                 : () async {
                     final scaffoldMessenger = ScaffoldMessenger.of(context);
-                    
+
                     final success = await deviceProvider.flashBoot(
                       patchProvider.patchedFilePath!,
                       onLog: (line) {},
                     );
-                    
-                     if (success && mounted) {
+
+                    if (success && mounted) {
                       scaffoldMessenger.showSnackBar(
                         SnackBar(
                           content: Text(l10n.flashSuccess),
                           backgroundColor: Colors.green,
                         ),
                       );
-                      
+
                       showDialog(
                         context: context,
                         builder: (ctx) => AlertDialog(
@@ -416,7 +435,7 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
                               onPressed: () => Navigator.pop(ctx),
                               child: Text(l10n.rebootLater),
                             ),
-                            ElevatedButton(
+                            FilledButton(
                               onPressed: () async {
                                 Navigator.pop(ctx);
                                 await deviceProvider.rebootDevice();
@@ -435,44 +454,45 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.red[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red[200]!),
+              color: colorScheme.errorContainer.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: colorScheme.error.withValues(alpha: 0.4)),
             ),
             child: Row(
               children: [
-                Icon(Icons.error, color: Colors.red[600]),
+                Icon(Icons.error, color: colorScheme.error),
                 const SizedBox(width: 8),
-                Text(
-                  l10n.noFastbootDevice,
-                  style: TextStyle(color: Colors.red[800]),
+                Expanded(
+                  child: Text(
+                    l10n.noFastbootDevice,
+                    style: TextStyle(color: colorScheme.onErrorContainer),
+                  ),
                 ),
               ],
             ),
           ),
         ],
         const SizedBox(height: 24),
-        Row(
-          children: [
-            OutlinedButton(
-              onPressed: _prevStep,
-              child: Text(l10n.previousStep),
-            ),
-          ],
+        OutlinedButton(
+          onPressed: _prevStep,
+          child: Text(l10n.previousStep),
         ),
       ],
     );
   }
 
   Widget _buildStepTitle(String title, String subtitle) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
+            color: colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 4),
@@ -480,7 +500,7 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
           subtitle,
           style: TextStyle(
             fontSize: 14,
-            color: Colors.grey[600],
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -489,12 +509,9 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
 
   Widget _buildFileSelector(PatchProvider patchProvider) {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -502,14 +519,15 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.insert_drive_file, color: Colors.blue[600]),
+                Icon(Icons.insert_drive_file_outlined,
+                    color: colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   l10n.selectBootImage,
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[800],
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
                   ),
                 ),
               ],
@@ -517,31 +535,34 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
             const SizedBox(height: 12),
             InkWell(
               onTap: patchProvider.isRunning ? null : _selectFile,
+              borderRadius: BorderRadius.circular(10),
               child: Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[300]!),
+                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colorScheme.outlineVariant),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.folder_open, color: Colors.grey[600]),
+                    Icon(Icons.folder_open, color: colorScheme.onSurfaceVariant),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        patchProvider.selectedFilePath ?? l10n.clickToSelectFile,
+                        patchProvider.selectedFilePath ??
+                            l10n.clickToSelectFile,
                         style: TextStyle(
                           fontSize: 13,
                           color: patchProvider.selectedFilePath != null
-                              ? Colors.grey[800]
-                              : Colors.grey[500],
+                              ? colorScheme.onSurface
+                              : colorScheme.onSurfaceVariant,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (patchProvider.selectedFilePath != null)
-                      Icon(Icons.check_circle, color: Colors.green[600], size: 20),
+                      const Icon(Icons.check_circle,
+                          color: Colors.green, size: 20),
                   ],
                 ),
               ),
@@ -554,7 +575,7 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
 
   Future<void> _selectKpmModules() async {
     final modules = await _fileService.selectKpmModules();
-    if (modules.isNotEmpty) {
+    if (modules.isNotEmpty && mounted) {
       final patchProvider = context.read<PatchProvider>();
       final currentModules = Set<String>.from(patchProvider.selectedKpmModules);
       currentModules.addAll(modules);
@@ -564,13 +585,10 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
 
   Widget _buildKpmModuleSelector(PatchProvider patchProvider) {
     final l10n = S.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
     final modules = patchProvider.selectedKpmModules.toList();
-    
+
     return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -578,30 +596,32 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.inventory_2, color: Colors.purple[600]),
+                Icon(Icons.inventory_2_outlined,
+                    color: colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   l10n.kpmModules,
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[800],
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 if (modules.isNotEmpty) ...[
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.purple[100],
+                      color: colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       '${modules.length}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.purple[900],
-                        fontWeight: FontWeight.w500,
+                        color: colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -609,13 +629,10 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
                 const Spacer(),
                 if (modules.isNotEmpty)
                   TextButton(
-                    onPressed: patchProvider.isRunning 
-                        ? null 
-                        : () => patchProvider.clearKpmModules(),
-                    child: Text(
-                      l10n.clearAllModules,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
+                    onPressed: patchProvider.isRunning
+                        ? null
+                        : patchProvider.clearKpmModules,
+                    child: Text(l10n.clearAllModules),
                   ),
               ],
             ),
@@ -623,21 +640,26 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
             if (modules.isEmpty)
               InkWell(
                 onTap: patchProvider.isRunning ? null : _selectKpmModules,
+                borderRadius: BorderRadius.circular(10),
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[300]!),
-                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: colorScheme.outlineVariant),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.add_circle_outline, color: Colors.grey[400], size: 20),
+                        Icon(Icons.add_circle_outline,
+                            color: colorScheme.onSurfaceVariant, size: 20),
                         const SizedBox(width: 8),
                         Text(
                           l10n.selectKpmModules,
-                          style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -657,17 +679,22 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.purple[50],
+                                color: colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.45),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.insert_drive_file, size: 16, color: Colors.purple[600]),
+                                  Icon(Icons.insert_drive_file_outlined,
+                                      size: 16, color: colorScheme.primary),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       fileName,
-                                      style: TextStyle(fontSize: 12, color: Colors.grey[800]),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: colorScheme.onSurface,
+                                      ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
@@ -677,27 +704,27 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
                           ),
                           const SizedBox(width: 8),
                           IconButton(
-                            icon: Icon(Icons.close, size: 18, color: Colors.grey[600]),
-                            onPressed: patchProvider.isRunning 
-                                ? null 
+                            icon: Icon(Icons.close,
+                                size: 18, color: colorScheme.onSurfaceVariant),
+                            onPressed: patchProvider.isRunning
+                                ? null
                                 : () => patchProvider.removeKpmModule(path),
                             tooltip: l10n.removeModule,
-                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            constraints: const BoxConstraints(
+                                minWidth: 32, minHeight: 32),
                             padding: EdgeInsets.zero,
                           ),
                         ],
                       ),
                     );
-                  }).toList(),
+                  }),
                   const SizedBox(height: 4),
                   Center(
                     child: TextButton.icon(
-                      onPressed: patchProvider.isRunning ? null : _selectKpmModules,
-                      icon: Icon(Icons.add, size: 16),
+                      onPressed:
+                          patchProvider.isRunning ? null : _selectKpmModules,
+                      icon: const Icon(Icons.add, size: 16),
                       label: Text(l10n.selectKpmModules),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.purple[600],
-                      ),
                     ),
                   ),
                 ],

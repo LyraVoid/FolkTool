@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/constants.dart';
@@ -30,18 +31,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initData() async {
     final deviceProvider = context.read<DeviceProvider>();
-    
+
     await deviceProvider.checkDriver();
     deviceProvider.startMonitoring();
-    
+
     await _loadRecentFiles();
   }
 
   Future<void> _loadRecentFiles() async {
     final files = await _fileService.getRecentFiles();
-    setState(() {
-      _recentFiles = files;
-    });
+    if (mounted) {
+      setState(() {
+        _recentFiles = files;
+      });
+    }
   }
 
   void _navigateToQuickPatch() {
@@ -72,56 +75,108 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  IconData _themeIcon(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light:
+        return Icons.light_mode_outlined;
+      case ThemeMode.dark:
+        return Icons.dark_mode_outlined;
+      case ThemeMode.system:
+        return Icons.brightness_auto_outlined;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = S.of(context);
     final localeProvider = context.watch<LocaleProvider>();
-    
+    final themeProvider = context.watch<ThemeProvider>();
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          l10n.appName,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-        elevation: 0,
+        title: Text(l10n.appName),
         actions: [
+          PopupMenuButton<ThemeMode>(
+            icon: Icon(_themeIcon(themeProvider.themeMode)),
+            tooltip: l10n.switchTheme,
+            initialValue: themeProvider.themeMode,
+            onSelected: (mode) => themeProvider.setThemeMode(mode),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: ThemeMode.system,
+                child: Row(
+                  children: [
+                    const Icon(Icons.brightness_auto_outlined, size: 18),
+                    const SizedBox(width: 10),
+                    Text(l10n.themeSystem),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: ThemeMode.light,
+                child: Row(
+                  children: [
+                    const Icon(Icons.light_mode_outlined, size: 18),
+                    const SizedBox(width: 10),
+                    Text(l10n.themeLight),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: ThemeMode.dark,
+                child: Row(
+                  children: [
+                    const Icon(Icons.dark_mode_outlined, size: 18),
+                    const SizedBox(width: 10),
+                    Text(l10n.themeDark),
+                  ],
+                ),
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.language),
             onPressed: () => localeProvider.toggleLanguage(),
-            tooltip: localeProvider.isZh ? l10n.switchToEnglish : l10n.switchToChinese,
+            tooltip: localeProvider.isZh
+                ? l10n.switchToEnglish
+                : l10n.switchToChinese,
           ),
           IconButton(
             icon: const Icon(Icons.info_outline),
-            onPressed: () => _showAboutDialog(),
+            onPressed: _showAboutDialog,
             tooltip: l10n.aboutTooltip,
           ),
         ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: Column(
-           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-             const DeviceStatusCard(),
-             const SizedBox(height: 24),
-             const ClientCheckCard(),
-             const SizedBox(height: 24),
-             _buildModeSelection(context),
-             const SizedBox(height: 24),
-             if (_recentFiles.isNotEmpty) ...[
-               Text(
-                 l10n.recentFiles,
-                 style: TextStyle(
-                   fontSize: 16,
-                   fontWeight: FontWeight.w600,
-                   color: Colors.grey[800],
-                 ),
-               ),
-              const SizedBox(height: 12),
-              _buildRecentFiles(),
-            ],
-          ],
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 840),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const DeviceStatusCard(),
+                const ClientCheckCard(),
+                const SizedBox(height: 20),
+                _buildModeSelection(context),
+                if (_recentFiles.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    l10n.recentFiles,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildRecentFiles(context),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -129,6 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildModeSelection(BuildContext context) {
     final l10n = S.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,98 +192,118 @@ class _HomeScreenState extends State<HomeScreen> {
         Text(
           l10n.selectMode,
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: Colors.grey[800],
+            color: colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildModeCard(
-                title: l10n.quickPatch,
-                subtitle: l10n.quickPatchSubtitle,
-                icon: Icons.flash_on,
-                color: Colors.blue,
-                onTap: _navigateToQuickPatch,
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _buildModeCard(
+                  context: context,
+                  title: l10n.quickPatch,
+                  subtitle: l10n.quickPatchSubtitle,
+                  icon: Icons.flash_on,
+                  color: Colors.blue,
+                  onTap: _navigateToQuickPatch,
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildModeCard(
-                title: l10n.stepPatch,
-                subtitle: l10n.stepPatchSubtitle,
-                icon: Icons.list_alt,
-                color: Colors.green,
-                onTap: _navigateToStepPatch,
+              const SizedBox(width: 14),
+              Expanded(
+                child: _buildModeCard(
+                  context: context,
+                  title: l10n.stepPatch,
+                  subtitle: l10n.stepPatchSubtitle,
+                  icon: Icons.list_alt,
+                  color: Colors.green,
+                  onTap: _navigateToStepPatch,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildModeCard(
-                title: l10n.simplePatch,
-                subtitle: l10n.simplePatchSubtitle,
-                icon: Icons.build_circle,
-                color: Colors.orange,
-                onTap: _navigateToSimplePatch,
+        const SizedBox(height: 14),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _buildModeCard(
+                  context: context,
+                  title: l10n.simplePatch,
+                  subtitle: l10n.simplePatchSubtitle,
+                  icon: Icons.build_circle,
+                  color: Colors.orange,
+                  onTap: _navigateToSimplePatch,
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildModeCard(
-                title: l10n.driverInstall,
-                subtitle: l10n.driverInstallSubtitle,
-                icon: Icons.usb,
-                color: Colors.purple,
-                onTap: _navigateToDriverInstall,
+              const SizedBox(width: 14),
+              Expanded(
+                child: _buildModeCard(
+                  context: context,
+                  title: l10n.driverInstall,
+                  subtitle: l10n.driverInstallSubtitle,
+                  icon: Icons.usb,
+                  color: Colors.purple,
+                  onTap: _navigateToDriverInstall,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
   }
 
   Widget _buildModeCard({
+    required BuildContext context,
     required String title,
     required String subtitle,
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(20),
+        hoverColor: color.withValues(alpha: 0.06),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 28),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: color, size: 24),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               Text(
                 title,
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
+                  color: colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 4),
@@ -235,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 subtitle,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[600],
+                  color: colorScheme.onSurfaceVariant,
                   height: 1.4,
                 ),
                 maxLines: 2,
@@ -248,27 +324,39 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildRecentFiles() {
+  Widget _buildRecentFiles(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: _recentFiles.take(5).map((file) {
-          final fileName = file.split('\\').last;
+          final fileName = p.basename(file);
           return ListTile(
-            leading: Icon(Icons.insert_drive_file, color: Colors.grey[600]),
+            leading: Icon(
+              Icons.insert_drive_file_outlined,
+              color: colorScheme.onSurfaceVariant,
+            ),
             title: Text(
               fileName,
-              style: const TextStyle(fontSize: 14),
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurface,
+              ),
             ),
             subtitle: Text(
               file,
-              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+              style: TextStyle(
+                fontSize: 11,
+                color: colorScheme.onSurfaceVariant,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+            trailing: Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: colorScheme.onSurfaceVariant,
+            ),
             onTap: () {
               final patchProvider = context.read<PatchProvider>();
               patchProvider.setSelectedFile(file);
@@ -282,7 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _launchGitHub(BuildContext context) async {
     final l10n = S.of(context);
-    final Uri url = Uri.parse('https://github.com/matsuzaka-yuki/FolkTool');
+    final Uri url = Uri.parse('https://github.com/LyraVoid/FolkTool');
     try {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     } catch (e) {
@@ -296,7 +384,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showAboutDialog() {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -304,146 +393,157 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 350),
+          constraints: const BoxConstraints(maxWidth: 380),
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              CircleAvatar(
-                radius: 50,
-                backgroundColor: Colors.grey[200],
-                child: ClipOval(
-                  child: Image.network(
-                    'http://q.qlogo.cn/headimg_dl?dst_uin=3231515355&spec=640&img_type=jpg',
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.person, size: 50, color: Colors.grey);
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                l10n.matsuzakaYuki,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                l10n.appVersion(Constants.appVersion),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 24),
-              OutlinedButton.icon(
-                onPressed: () => _launchGitHub(context),
-                icon: const Icon(Icons.link, size: 18),
-                label: Text(l10n.github),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue[200]!),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
-                        const SizedBox(width: 8),
-                        Text(
-                          l10n.aboutTitle,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue[700],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.aboutDescription,
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.aboutDescription2,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange[200]!),
+                const SizedBox(height: 8),
+                CircleAvatar(
+                  radius: 44,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  child: ClipOval(
+                    child: Image.network(
+                      'http://q.qlogo.cn/headimg_dl?dst_uin=3231515355&spec=640&img_type=jpg',
+                      width: 88,
+                      height: 88,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.person,
+                          size: 44,
+                          color: colorScheme.onSurfaceVariant,
+                        );
+                      },
+                    ),
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.warning_amber_outlined, size: 18, color: Colors.orange[700]),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        l10n.backupWarning,
+                const SizedBox(height: 14),
+                Text(
+                  l10n.matsuzakaYuki,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.appVersion(Constants.appVersion),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                OutlinedButton.icon(
+                  onPressed: () => _launchGitHub(context),
+                  icon: const Icon(Icons.link, size: 18),
+                  label: Text(l10n.github),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: colorScheme.primary.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            l10n.aboutTitle,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        l10n.aboutDescription,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.aboutDescription2,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.orange[700],
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Colors.orange.withValues(alpha: 0.35),
                     ),
                   ),
-                  child: Text(MaterialLocalizations.of(context).okButtonLabel),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_outlined,
+                        size: 18,
+                        color: Colors.orange,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l10n.backupWarning,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(MaterialLocalizations.of(context).okButtonLabel),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

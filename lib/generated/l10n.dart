@@ -2128,6 +2128,76 @@ class S {
       args: [],
     );
   }
+
+  /// `Switch Theme`
+  String get switchTheme {
+    return Intl.message(
+      'Switch Theme',
+      name: 'switchTheme',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Follow System`
+  String get themeSystem {
+    return Intl.message(
+      'Follow System',
+      name: 'themeSystem',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Light Mode`
+  String get themeLight {
+    return Intl.message(
+      'Light Mode',
+      name: 'themeLight',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Dark Mode`
+  String get themeDark {
+    return Intl.message(
+      'Dark Mode',
+      name: 'themeDark',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Copy Logs`
+  String get copyLogs {
+    return Intl.message(
+      'Copy Logs',
+      name: 'copyLogs',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Logs copied to clipboard`
+  String get logsCopied {
+    return Intl.message(
+      'Logs copied to clipboard',
+      name: 'logsCopied',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Clear Logs`
+  String get clearLogs {
+    return Intl.message(
+      'Clear Logs',
+      name: 'clearLogs',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<S> {

@@ -410,6 +410,13 @@ class MessageLookup extends MessageLookupByLibrary {
     "unknown": MessageLookupByLibrary.simpleMessage("未知"),
     "versionCustom": MessageLookupByLibrary.simpleMessage("自定义"),
     "versionRecommended": MessageLookupByLibrary.simpleMessage("推荐"),
+    "switchTheme": MessageLookupByLibrary.simpleMessage("切换主题"),
+    "themeSystem": MessageLookupByLibrary.simpleMessage("跟随系统"),
+    "themeLight": MessageLookupByLibrary.simpleMessage("浅色模式"),
+    "themeDark": MessageLookupByLibrary.simpleMessage("深色模式"),
+    "copyLogs": MessageLookupByLibrary.simpleMessage("复制日志"),
+    "logsCopied": MessageLookupByLibrary.simpleMessage("日志已复制到剪贴板"),
+    "clearLogs": MessageLookupByLibrary.simpleMessage("清空日志"),
     "versionSupportUnpack": MessageLookupByLibrary.simpleMessage("内置解包"),
   };
 }

@@ -16,14 +16,11 @@ class DeviceStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Consumer<DeviceProvider>(
       builder: (context, deviceProvider, child) {
         return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -34,7 +31,7 @@ class DeviceStatusCard extends StatelessWidget {
                     Icon(
                       Icons.devices,
                       size: 20,
-                      color: Theme.of(context).primaryColor,
+                      color: colorScheme.primary,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -42,9 +39,11 @@ class DeviceStatusCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey[800],
+                        color: colorScheme.onSurface,
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    _buildStatusPill(context, deviceProvider, l10n),
                     const Spacer(),
                     if (showRefreshButton)
                       SizedBox(
@@ -56,7 +55,7 @@ class DeviceStatusCard extends StatelessWidget {
                                   height: 16,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Theme.of(context).primaryColor,
+                                    color: colorScheme.primary,
                                   ),
                                 ),
                               )
@@ -91,11 +90,69 @@ class DeviceStatusCard extends StatelessWidget {
     );
   }
 
+  Widget _buildStatusPill(
+    BuildContext context,
+    DeviceProvider provider,
+    S l10n,
+  ) {
+    Color dotColor;
+    String label;
+    switch (provider.connectionState) {
+      case DeviceConnectionState.adbConnected:
+        dotColor = Colors.green;
+        label = 'ADB';
+        break;
+      case DeviceConnectionState.fastbootConnected:
+        dotColor = Colors.green;
+        label = 'Fastboot';
+        break;
+      case DeviceConnectionState.checking:
+        dotColor = Theme.of(context).colorScheme.primary;
+        label = l10n.checking;
+        break;
+      case DeviceConnectionState.disconnected:
+        dotColor = Theme.of(context).colorScheme.outline;
+        label = l10n.noDeviceDetected;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: dotColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: dotColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: dotColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatusContent(BuildContext context, DeviceProvider provider) {
     final l10n = S.of(context);
-    
+
     if (!provider.driverInstalled) {
       return _buildWarningItem(
+        context,
         l10n.checkingDriver,
         l10n.checkingDriverDesc,
         Colors.orange,
@@ -116,46 +173,51 @@ class DeviceStatusCard extends StatelessWidget {
 
   Widget _buildDisconnected(BuildContext context) {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       children: [
         _buildStatusItem(
+          context,
           l10n.noDeviceDetected,
           l10n.noDeviceDetectedDesc,
-          Colors.grey,
+          colorScheme.outline,
           Icons.usb_off,
         ),
         const SizedBox(height: 12),
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.blue[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.blue[200]!),
+            color: colorScheme.primaryContainer.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: colorScheme.primary.withValues(alpha: 0.25),
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Icon(Icons.help_outline, size: 16, color: Colors.blue[700]),
+                  Icon(Icons.help_outline, size: 16, color: colorScheme.primary),
                   const SizedBox(width: 6),
                   Text(
                     l10n.deviceConnectionTips,
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.blue[700],
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 l10n.deviceConnectionTipsDesc,
                 style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.blue[700],
+                  fontSize: 11.5,
+                  color: colorScheme.onSurfaceVariant,
                   height: 1.5,
                 ),
               ),
@@ -170,6 +232,7 @@ class DeviceStatusCard extends StatelessWidget {
     final l10n = S.of(context);
     final device = provider.adbDevices.first;
     return _buildStatusItem(
+      context,
       l10n.adbConnected,
       l10n.serial(device.serial),
       Colors.green,
@@ -181,6 +244,7 @@ class DeviceStatusCard extends StatelessWidget {
     final l10n = S.of(context);
     final device = provider.fastbootDevices.first;
     return _buildStatusItem(
+      context,
       l10n.fastbootConnected,
       l10n.serial(device.serial),
       Colors.green,
@@ -191,32 +255,36 @@ class DeviceStatusCard extends StatelessWidget {
   Widget _buildChecking(BuildContext context) {
     final l10n = S.of(context);
     return _buildStatusItem(
+      context,
       l10n.checking,
       l10n.scanning,
-      Colors.blue,
+      Theme.of(context).colorScheme.primary,
       Icons.search,
     );
   }
 
   Widget _buildStatusItem(
+    BuildContext context,
     String title,
     String subtitle,
     Color color,
     IconData icon,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: color.withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 20),
@@ -231,7 +299,7 @@ class DeviceStatusCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -239,7 +307,7 @@ class DeviceStatusCard extends StatelessWidget {
                   subtitle,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -250,20 +318,27 @@ class DeviceStatusCard extends StatelessWidget {
     );
   }
 
-  Widget _buildWarningItem(String title, String subtitle, Color color) {
+  Widget _buildWarningItem(
+    BuildContext context,
+    String title,
+    String subtitle,
+    Color color,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: color.withValues(alpha: 0.18),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.warning_amber, color: color, size: 20),
@@ -278,7 +353,7 @@ class DeviceStatusCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -286,7 +361,7 @@ class DeviceStatusCard extends StatelessWidget {
                   subtitle,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],

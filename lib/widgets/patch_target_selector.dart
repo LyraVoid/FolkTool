@@ -9,9 +9,10 @@ class PatchTargetSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = S.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -19,59 +20,43 @@ class PatchTargetSelector extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.shield, color: Colors.indigo[600]),
+                Icon(Icons.shield_outlined, color: colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  S.current.patchTarget,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[800]),
+                  l10n.patchTarget,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             Consumer<VersionProvider>(
               builder: (context, versionProvider, child) {
-                return Row(
-                  children: PatchTarget.values.map((target) {
-                    final isSelected = versionProvider.currentTarget == target;
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: InkWell(
-                          onTap: () => versionProvider.setTarget(target),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                            decoration: BoxDecoration(
-                              color: isSelected ? Colors.indigo[50] : Colors.grey[100],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: isSelected ? Colors.indigo[400]! : Colors.grey[300]!,
-                                width: isSelected ? 2 : 1,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                                  size: 18,
-                                  color: isSelected ? Colors.indigo[600] : Colors.grey[500],
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  target.displayName,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                    color: isSelected ? Colors.indigo[800] : Colors.grey[700],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                return SizedBox(
+                  width: double.infinity,
+                  child: SegmentedButton<PatchTarget>(
+                    segments: PatchTarget.values.map((target) {
+                      return ButtonSegment<PatchTarget>(
+                        value: target,
+                        label: Text(target.displayName),
+                        icon: Icon(
+                          target == PatchTarget.folkpatch
+                              ? Icons.extension_outlined
+                              : Icons.security_outlined,
+                          size: 18,
                         ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                    selected: {versionProvider.currentTarget},
+                    onSelectionChanged: (selection) {
+                      if (selection.isNotEmpty) {
+                        versionProvider.setTarget(selection.first);
+                      }
+                    },
+                  ),
                 );
               },
             ),

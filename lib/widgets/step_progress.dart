@@ -34,20 +34,22 @@ class StepProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = S.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final progress = steps.isEmpty ? 0.0 : (currentIndex + 1) / steps.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Row(
             children: [
               Text(
                 l10n.operationProgress,
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurface,
                 ),
               ),
               const SizedBox(width: 12),
@@ -55,10 +57,10 @@ class StepProgress extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: steps.isEmpty ? 0 : (currentIndex + 1) / steps.length,
-                    backgroundColor: Colors.grey[300],
+                    value: progress,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context).primaryColor,
+                      colorScheme.primary,
                     ),
                     minHeight: 8,
                   ),
@@ -66,11 +68,11 @@ class StepProgress extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Text(
-                '${((steps.isEmpty ? 0 : (currentIndex + 1) / steps.length) * 100).toInt()}%',
+                '${(progress * 100).toInt()}%',
                 style: TextStyle(
                   fontSize: 13,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -79,13 +81,14 @@ class StepProgress extends StatelessWidget {
         const SizedBox(height: 16),
         ...List.generate(steps.length, (index) {
           final step = steps[index];
-          return _buildStepItem(step, index, l10n);
+          return _buildStepItem(context, step, l10n);
         }),
       ],
     );
   }
 
-  Widget _buildStepItem(OperationStep step, int index, S l10n) {
+  Widget _buildStepItem(BuildContext context, OperationStep step, S l10n) {
+    final colorScheme = Theme.of(context).colorScheme;
     IconData icon;
     Color iconColor;
     Color bgColor;
@@ -93,23 +96,23 @@ class StepProgress extends StatelessWidget {
     switch (step.status) {
       case StepStatus.pending:
         icon = Icons.radio_button_unchecked;
-        iconColor = Colors.grey;
+        iconColor = colorScheme.outline;
         bgColor = Colors.transparent;
         break;
       case StepStatus.inProgress:
         icon = Icons.pending;
-        iconColor = Colors.blue;
-        bgColor = Colors.blue.withOpacity(0.1);
+        iconColor = colorScheme.primary;
+        bgColor = colorScheme.primary.withValues(alpha: 0.1);
         break;
       case StepStatus.completed:
         icon = Icons.check_circle;
         iconColor = Colors.green;
-        bgColor = Colors.green.withOpacity(0.1);
+        bgColor = Colors.green.withValues(alpha: 0.1);
         break;
       case StepStatus.failed:
         icon = Icons.error;
-        iconColor = Colors.red;
-        bgColor = Colors.red.withOpacity(0.1);
+        iconColor = colorScheme.error;
+        bgColor = colorScheme.error.withValues(alpha: 0.1);
         break;
     }
 
@@ -118,7 +121,7 @@ class StepProgress extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
@@ -141,8 +144,8 @@ class StepProgress extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     color: step.status == StepStatus.pending
-                        ? Colors.grey[600]
-                        : Colors.grey[800],
+                        ? colorScheme.onSurfaceVariant
+                        : colorScheme.onSurface,
                     fontWeight: step.status == StepStatus.inProgress
                         ? FontWeight.w600
                         : FontWeight.normal,
@@ -152,9 +155,9 @@ class StepProgress extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     step.errorMessage!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
-                      color: Colors.red,
+                      color: colorScheme.error,
                     ),
                   ),
                 ],
@@ -167,7 +170,7 @@ class StepProgress extends StatelessWidget {
               height: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.blue[400],
+                color: colorScheme.primary,
               ),
             ),
         ],

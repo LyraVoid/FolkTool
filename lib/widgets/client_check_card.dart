@@ -14,7 +14,6 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
   @override
   void initState() {
     super.initState();
-    // ADB 连接后自动检测客户端
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final deviceProvider = context.read<DeviceProvider>();
       if (deviceProvider.hasAdbDevice) {
@@ -26,72 +25,76 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
   @override
   Widget build(BuildContext context) {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Consumer<DeviceProvider>(
       builder: (context, deviceProvider, child) {
-        // 只有在 ADB 连接时才显示
-        if (!deviceProvider.hasAdbDevice) {
-          return const SizedBox.shrink();
-        }
-        
-        return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.apps,
-                      size: 20,
-                      color: Theme.of(context).primaryColor,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      l10n.clientCheck,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                    const Spacer(),
-                    SizedBox(
-                      height: 32,
-                      child: deviceProvider.isManualCheckingClients
-                          ? Center(
-                              child: SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Theme.of(context).primaryColor,
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: !deviceProvider.hasAdbDevice
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Card(
+                    key: const ValueKey('client-check-card'),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.apps,
+                                size: 20,
+                                color: colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                l10n.clientCheck,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: colorScheme.onSurface,
                                 ),
                               ),
-                            )
-                          : TextButton.icon(
-                              onPressed: () => deviceProvider.manualRefreshClients(),
-                              icon: const Icon(Icons.refresh, size: 18),
-                              label: Text(l10n.refresh),
-                              style: TextButton.styleFrom(
-                                minimumSize: Size.zero,
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              const Spacer(),
+                              SizedBox(
+                                height: 32,
+                                child: deviceProvider.isManualCheckingClients
+                                    ? Center(
+                                        child: SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: colorScheme.primary,
+                                          ),
+                                        ),
+                                      )
+                                    : TextButton.icon(
+                                        onPressed: () =>
+                                            deviceProvider.manualRefreshClients(),
+                                        icon: const Icon(Icons.refresh, size: 18),
+                                        label: Text(l10n.refresh),
+                                        style: TextButton.styleFrom(
+                                          minimumSize: Size.zero,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                      ),
                               ),
-                            ),
+                            ],
+                          ),
+                          const Divider(height: 24),
+                          _buildClientList(context, deviceProvider),
+                        ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
-                const Divider(height: 24),
-                _buildClientList(context, deviceProvider),
-              ],
-            ),
-          ),
         );
       },
     );
@@ -101,10 +104,9 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
     final l10n = S.of(context);
     final apatchStatus = provider.apatchStatus;
     final folkpatchStatus = provider.folkpatchStatus;
-    
+
     return Column(
       children: [
-        // APatch 状态
         _buildClientItem(
           context: context,
           name: 'APatch',
@@ -113,12 +115,11 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
           installed: apatchStatus.installed,
           installing: apatchStatus.installing,
           color: Colors.blue,
-          onInstall: apatchStatus.installed 
-              ? null 
+          onInstall: apatchStatus.installed
+              ? null
               : () => _installClient(provider, ClientType.apatch),
         ),
         const SizedBox(height: 12),
-        // FolkPatch 状态
         _buildClientItem(
           context: context,
           name: 'FolkPatch',
@@ -127,8 +128,8 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
           installed: folkpatchStatus.installed,
           installing: folkpatchStatus.installing,
           color: Colors.green,
-          onInstall: folkpatchStatus.installed 
-              ? null 
+          onInstall: folkpatchStatus.installed
+              ? null
               : () => _installClient(provider, ClientType.folkpatch),
         ),
       ],
@@ -146,28 +147,22 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
     required VoidCallback? onInstall,
   }) {
     final l10n = S.of(context);
-    
+    final colorScheme = Theme.of(context).colorScheme;
+    final tint = installed ? Colors.green : colorScheme.outline;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: installed 
-            ? Colors.green.withOpacity(0.1)
-            : Colors.grey.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: installed 
-              ? Colors.green.withOpacity(0.3)
-              : Colors.grey.withOpacity(0.3),
-        ),
+        color: tint.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: tint.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: installed 
-                  ? Colors.green.withOpacity(0.2)
-                  : color.withOpacity(0.2),
+              color: (installed ? Colors.green : color).withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -188,13 +183,14 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey[800],
+                        color: colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(width: 8),
                     if (installed)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.green,
                           borderRadius: BorderRadius.circular(4),
@@ -215,7 +211,7 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
                   description,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -234,7 +230,8 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
                 : TextButton(
                     onPressed: onInstall,
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       minimumSize: Size.zero,
                     ),
                     child: Text(
@@ -242,7 +239,7 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
                       style: TextStyle(
                         fontSize: 13,
                         color: color,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -254,28 +251,23 @@ class _ClientCheckCardState extends State<ClientCheckCard> {
   Future<void> _installClient(DeviceProvider provider, ClientType type) async {
     final l10n = S.of(context);
     final clientName = type == ClientType.apatch ? 'APatch' : 'FolkPatch';
-    
+
     final success = await provider.installClient(
       type,
       onLog: (line) => debugPrint('[Install$clientName] $line'),
     );
-    
+
     if (mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.installSuccess(clientName)),
-            backgroundColor: Colors.green,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? l10n.installSuccess(clientName)
+                : l10n.installFailed(clientName),
           ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.installFailed(clientName)),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+          backgroundColor: success ? Colors.green : Colors.red,
+        ),
+      );
     }
   }
 }
