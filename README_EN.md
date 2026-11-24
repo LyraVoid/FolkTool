@@ -40,7 +40,7 @@ FolkTool is a fast Root flashing tool designed specifically for FolkPatch and AP
 
 ### 📦 Usage Guide
 
-1. **Download:** Download the latest FolkTool-Setup.exe from the [Release Page](https://github.com/yourusername/FolkTool/releases/latest)
+1. **Download:** Download the latest FolkTool-Setup.exe from the [Release Page](https://github.com/LyraVoid/FolkTool/releases/latest)
 
 2. **Install:** Run the installer and complete the installation following the wizard
 
@@ -105,7 +105,7 @@ Using this tool may cause device bricking, data loss, or void warranty. Please b
 ### FolkTool Discussion
 
 - Telegram Channel: [@FolkTool](https://t.me/FolkPatch)
-- GitHub Issues: [Submit Issues](https://github.com/matsuzaka-yuki/FolkTool/issues)
+- GitHub Issues: [Submit Issues](https://github.com/LyraVoid/FolkTool/issues)
 
 ## 📝 Changelog
 
