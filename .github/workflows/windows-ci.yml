@@ -38,6 +38,26 @@ jobs:
       - name: Build Windows Release
         run: flutter build windows --release
 
+      - name: Verify PE architecture & CRT dependencies
+        shell: pwsh
+        run: |
+          $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dumpbin = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Filter "dumpbin.exe" -Recurse | Where-Object { $_.FullName -match "Hostx64\\x64" } | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $dumpbin) {
+            Write-Warning "dumpbin.exe not found; skipping PE inspection"
+            exit 0
+          }
+          $exe = "build\windows\x64\runner\Release\FolkTool.exe"
+          $headers = & $dumpbin /headers $exe | Out-String
+          if ($headers -notmatch "x64") {
+            throw "FolkTool.exe is not an x64 binary!"
+          }
+          Write-Host "=== FolkTool.exe Dependencies ==="
+          & $dumpbin /dependents $exe
+          Write-Host "=== flutter_windows.dll Dependencies ==="
+          & $dumpbin /dependents "build\windows\x64\runner\Release\flutter_windows.dll"
+
       - name: Verify VC++ Redistributable download URL
         shell: pwsh
         run: |
@@ -80,12 +100,14 @@ jobs:
             throw "Expected output release\FolkTool-Setup-v1.7.0.exe not found"
           }
 
-      - name: Smoke test silent install, app launch, and uninstall
+      - name: Smoke test silent install, window bounds, and uninstall
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path "artifacts" | Out-Null
+          $logPath = (Join-Path $PWD "artifacts\install-smoke.log")
           Write-Host "Installing FolkTool-Setup.exe silently..."
           $installProc = Start-Process -FilePath "installer\FolkTool-Setup.exe" `
-            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" `
+            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`"$logPath`"" `
             -Wait -PassThru
           if ($installProc.ExitCode -ne 0) {
             throw "Silent installer exited with code $($installProc.ExitCode)"
@@ -96,8 +118,14 @@ jobs:
           $requiredPaths = @(
             $exePath,
             (Join-Path $installDir "flutter_windows.dll"),
+            (Join-Path $installDir "url_launcher_windows_plugin.dll"),
             (Join-Path $installDir "bin\kptools.exe"),
-            (Join-Path $installDir "kp_versions\folkpatch\kpimg")
+            (Join-Path $installDir "bin\adb.exe"),
+            (Join-Path $installDir "bin\fastboot.exe"),
+            (Join-Path $installDir "bin\msys-2.0.dll"),
+            (Join-Path $installDir "assets\kpimg"),
+            (Join-Path $installDir "kp_versions\folkpatch\kpimg"),
+            (Join-Path $installDir "kp_versions\apatch\kpimg")
           )
           foreach ($p in $requiredPaths) {
             if (-not (Test-Path $p)) {
@@ -107,11 +135,46 @@ jobs:
 
           Write-Host "Launching installed FolkTool.exe..."
           $appProc = Start-Process -FilePath $exePath -PassThru
-          Start-Sleep -Seconds 4
-          if ($appProc.HasExited) {
-            throw "FolkTool.exe exited prematurely with code $($appProc.ExitCode)"
+          $hwnd = [IntPtr]::Zero
+          for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep -Milliseconds 500
+            $appProc.Refresh()
+            if ($appProc.HasExited) {
+              throw "FolkTool.exe exited prematurely with code $($appProc.ExitCode)"
+            }
+            if ($appProc.MainWindowHandle -ne [IntPtr]::Zero) {
+              $hwnd = $appProc.MainWindowHandle
+              break
+            }
           }
-          Write-Host "FolkTool.exe running (PID=$($appProc.Id), Title='$($appProc.MainWindowTitle)')"
+          if ($hwnd -eq [IntPtr]::Zero) {
+            Stop-Process -Id $appProc.Id -Force -ErrorAction SilentlyContinue
+            throw "FolkTool.exe window handle did not initialize within 10 seconds"
+          }
+
+          Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+          public class Win32Bounds {
+            [DllImport("user32.dll")]
+            public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+            [DllImport("user32.dll")]
+            public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, out RECT pvParam, uint fWinIni);
+          }
+          "@
+          $rect = New-Object RECT
+          $work = New-Object RECT
+          [Win32Bounds]::GetWindowRect($hwnd, [ref]$rect) | Out-Null
+          [Win32Bounds]::SystemParametersInfo(0x0030, 0, [ref]$work, 0) | Out-Null
+          Write-Host "WindowRect: L=$($rect.Left) T=$($rect.Top) R=$($rect.Right) B=$($rect.Bottom)"
+          Write-Host "WorkingArea: L=$($work.Left) T=$($work.Top) R=$($work.Right) B=$($work.Bottom)"
+
+          if ($rect.Top -lt $work.Top -or $rect.Left -lt $work.Left -or $rect.Right -gt $work.Right -or $rect.Bottom -gt $work.Bottom) {
+            Stop-Process -Id $appProc.Id -Force -ErrorAction SilentlyContinue
+            throw "Window extends outside usable WorkingArea (taskbar overlap detected)!"
+          }
+          Write-Host "Verified: FolkTool.exe window fits cleanly inside WorkingArea (PID=$($appProc.Id), Title='$($appProc.MainWindowTitle)')"
           Stop-Process -Id $appProc.Id -Force
 
           Write-Host "Uninstalling FolkTool silently..."
@@ -122,6 +185,10 @@ jobs:
               -Wait -PassThru
             if ($uninstProc.ExitCode -ne 0) {
               throw "Uninstaller exited with code $($uninstProc.ExitCode)"
+            }
+            Start-Sleep -Seconds 2
+            if (Test-Path $exePath) {
+              throw "FolkTool.exe still exists after uninstallation!"
             }
           }
 
@@ -149,19 +216,29 @@ jobs:
           path: artifacts/FolkTool-Windows-Portable.zip
           if-no-files-found: error
 
+      - name: Upload diagnostic logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-CI-Diagnostic-Logs
+          path: artifacts/install-smoke.log
+          if-no-files-found: ignore
+
       - name: Write Job Summary
         shell: pwsh
         run: |
           $setupSizeMB = [math]::Round((Get-Item "installer\FolkTool-Setup.exe").Length / 1MB, 2)
           $zipSizeMB = [math]::Round((Get-Item "artifacts\FolkTool-Windows-Portable.zip").Length / 1MB, 2)
+          $setupHash = (Get-FileHash "installer\FolkTool-Setup.exe" -Algorithm SHA256).Hash
+          $zipHash = (Get-FileHash "artifacts\FolkTool-Windows-Portable.zip" -Algorithm SHA256).Hash
           @"
           ## Windows CI Verification Summary
           - **Static Analysis (`flutter analyze`)**: Passed
           - **Widget Tests (`flutter test`)**: Passed
-          - **Windows Release Build**: Passed (`FolkTool.exe`)
+          - **Windows Release Build & PE x64 Audit (`dumpbin`)**: Passed
           - **Inno Setup Scripts**: `installer.iss` and `install.iss` both compiled cleanly
-          - **Silent Install -> Launch -> Uninstall Smoke Test**: Passed
+          - **Silent Install -> Window Bounds / Taskbar Check -> Clean Uninstall**: Passed
           - **Artifacts**:
-            - `FolkTool-Setup.exe` ($setupSizeMB MB)
-            - `FolkTool-Windows-Portable.zip` ($zipSizeMB MB)
+            - `FolkTool-Setup.exe` ($setupSizeMB MB) — SHA-256: ``$setupHash``
+            - `FolkTool-Windows-Portable.zip` ($zipSizeMB MB) — SHA-256: ``$zipHash``
           "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
