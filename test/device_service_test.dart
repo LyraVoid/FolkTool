@@ -6,7 +6,7 @@ import 'package:FolkTool/services/process_runner.dart';
 
 class _FakeProcessRunner implements ProcessRunner {
   final Future<ProcessResult> Function(String executable, List<String> args)
-      handler;
+  handler;
 
   _FakeProcessRunner(this.handler);
 
@@ -39,7 +39,28 @@ void main() {
       expect(devices[0].serial, 'ABC12345');
       expect(devices[0].state, DeviceState.adb);
       expect(devices[1].serial, 'DEF67890');
-      expect(devices[1].state, DeviceState.unknown);
+      expect(devices[1].state, DeviceState.unauthorized);
+    });
+
+    test('getAdbDevices ignores output when adb command fails', () async {
+      final service = DeviceService(
+        processRunner: _FakeProcessRunner(
+          (_, __) async => ProcessResult(
+            1,
+            1,
+            'List of devices attached\nABC123\tdevice\n',
+            'server failed',
+          ),
+        ),
+        skipBinaryExistsCheck: true,
+      );
+      expect(await service.getAdbDevices(), isEmpty);
+    });
+
+    test('unauthorized ADB device is not marked ready', () {
+      final device = DeviceInfo.fromAdbLine('ABC123 unauthorized');
+      expect(device.state, DeviceState.unauthorized);
+      expect(device.isReadyForOperation, isFalse);
     });
 
     test('getFastbootDevices parses fastboot devices', () async {
@@ -57,6 +78,41 @@ void main() {
       expect(devices, hasLength(1));
       expect(devices.first.serial, 'FASTBOOT123');
       expect(devices.first.state, DeviceState.fastboot);
+    });
+
+    test('flashBoot refuses missing image before invoking fastboot', () async {
+      var invoked = false;
+      final service = DeviceService(
+        processRunner: _FakeProcessRunner((_, __) async {
+          invoked = true;
+          return ProcessResult(1, 0, 'SERIAL fastboot\n', '');
+        }),
+        skipBinaryExistsCheck: true,
+      );
+      expect(await service.flashBoot('/missing/boot.img'), isFalse);
+      expect(invoked, isFalse);
+    });
+
+    test('flashBoot rejects multiple targets before writing', () async {
+      var flashInvoked = false;
+      final service = DeviceService(
+        processRunner: _FakeProcessRunner((_, args) async {
+          if (args.first == 'devices') {
+            return ProcessResult(1, 0, 'A fastboot\nB fastboot\n', '');
+          }
+          flashInvoked = true;
+          return ProcessResult(1, 0, '', '');
+        }),
+        skipBinaryExistsCheck: true,
+      );
+      final dir = await Directory.systemTemp.createTemp('folktool_flash_');
+      final image = File('${dir.path}/boot.img')..writeAsBytesSync([1, 2, 3]);
+      try {
+        expect(await service.flashBoot(image.path), isFalse);
+        expect(flashInvoked, isFalse);
+      } finally {
+        await dir.delete(recursive: true);
+      }
     });
 
     test('getBatteryLevel parses dumpsys battery output', () async {
