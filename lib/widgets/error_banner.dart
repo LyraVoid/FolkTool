@@ -101,7 +101,7 @@ class ErrorBanner extends StatelessWidget {
               ),
             ),
           ],
-          if (error.nextSteps != null && error.nextSteps!.isNotEmpty) ...[
+          if (error.nextSteps.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             Container(
               width: double.infinity,
@@ -121,7 +121,7 @@ class ErrorBanner extends StatelessWidget {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
-                      error.nextSteps!,
+                      error.nextSteps,
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
