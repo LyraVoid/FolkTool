@@ -1,3 +1,20 @@
+/// Explicit flashing state machine phases.
+enum FlashingPhase {
+  idle,
+  preflight,
+  validation,
+  preparation,
+  patching,
+  rebootingToFastboot,
+  fastbootDetection,
+  flashing,
+  rebootingToSystem,
+  verification,
+  completed,
+  failed,
+  uncertain,
+}
+
 enum StepStatus {
   pending,
   inProgress,
