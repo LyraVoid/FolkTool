@@ -81,6 +81,44 @@ jobs:
           }
           Write-Host "VC++ Redistributable URL reachable (HTTP $($response.StatusCode))"
 
+      - name: Audit & Sign Windows Binaries (if configured)
+        shell: pwsh
+        env:
+          CERT_B64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CERT_PASS: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          Write-Host "=== Upstream Binary Signature Audit ==="
+          foreach ($bin in @("bin\adb.exe", "bin\fastboot.exe", "bin\kptools.exe")) {
+            if (Test-Path $bin) {
+              $sig = Get-AuthenticodeSignature -LiteralPath $bin
+              Write-Host "${bin}: $($sig.Status) | $($sig.SignerCertificate.Subject)"
+            }
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CERT_B64)) {
+            Write-Host "::notice::UNSIGNED TEST BUILD - WINDOWS_CERT_PFX_BASE64 secret not configured. Skipping Authenticode signing."
+            "IS_SIGNED=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            exit 0
+          }
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) { throw "signtool.exe not found in Windows Kits" }
+          $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERT_B64))
+          try {
+            foreach ($target in @(
+              "build\windows\x64\runner\Release\FolkTool.exe",
+              "build\windows\x64\runner\Release\url_launcher_windows_plugin.dll"
+            )) {
+              & $signtool sign /f $pfxPath /p $env:CERT_PASS /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 $target
+              if ($LASTEXITCODE -ne 0) { throw "Failed to sign $target" }
+              & $signtool verify /pa $target
+              if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for $target" }
+            }
+          } finally {
+            Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+          }
+          "IS_SIGNED=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Ensure Inno Setup 6 is installed
         shell: pwsh
         run: |
@@ -95,11 +133,28 @@ jobs:
 
       - name: Compile installer.iss
         shell: pwsh
+        env:
+          CERT_B64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CERT_PASS: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
           & "$env:ISCC" "/DMyAppVersion=$env:APP_VERSION" installer.iss
           if ($LASTEXITCODE -ne 0) { throw "installer.iss compilation failed" }
           if (-not (Test-Path "installer\FolkTool-Setup.exe")) {
             throw "Expected output installer\FolkTool-Setup.exe not found"
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:CERT_B64)) {
+            $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+            $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERT_B64))
+            try {
+              & $signtool sign /f $pfxPath /p $env:CERT_PASS /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "installer\FolkTool-Setup.exe"
+              if ($LASTEXITCODE -ne 0) { throw "Failed to sign installer\FolkTool-Setup.exe" }
+              & $signtool verify /pa "installer\FolkTool-Setup.exe"
+              if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for installer\FolkTool-Setup.exe" }
+            } finally {
+              Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+            }
           }
 
       - name: Stage release folder and compile install.iss
@@ -120,7 +175,7 @@ jobs:
           $logPath = (Join-Path $PWD "artifacts\install-smoke.log")
           Write-Host "Installing FolkTool-Setup.exe silently..."
           $installProc = Start-Process -FilePath "installer\FolkTool-Setup.exe" `
-            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`"$logPath`"" `
+            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS /DIR=`"C:\Program Files\FolkTool`" /LOG=`"$logPath`"" `
             -Wait -PassThru
           if ($installProc.ExitCode -ne 0) {
             throw "Silent installer exited with code $($installProc.ExitCode)"
@@ -217,6 +272,12 @@ jobs:
           Copy-Item -Recurse -Force "bin" "artifacts\portable\bin"
           Copy-Item -Recurse -Force "assets" "artifacts\portable\assets"
           Copy-Item -Recurse -Force "kp_versions" "artifacts\portable\kp_versions"
+          @"
+          FolkTool v$env:APP_VERSION (Windows x64 Portable)
+          Commit: $env:GITHUB_SHA
+          Authenticode Signed: $env:IS_SIGNED
+          Note: If Authenticode Signed is false, this is an unsigned CI test build.
+          "@ | Out-File -FilePath "artifacts\portable\BUILD_INFO.txt" -Encoding utf8
           Compress-Archive -Path "artifacts\portable\*" -DestinationPath "artifacts\FolkTool-Windows-Portable.zip" -Force
 
       - name: Upload Installer Artifact

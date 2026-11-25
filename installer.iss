@@ -20,7 +20,7 @@
   #define OutputBaseFilename "FolkTool-Setup"
 #endif
 #ifndef DefaultInstallDir
-  #define DefaultInstallDir "{commonpf}\FolkTool"
+  #define DefaultInstallDir "{autopf}\FolkTool"
 #endif
 #ifndef CompressionAlgo
   #define CompressionAlgo "lzma"
@@ -32,6 +32,9 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppPublisherURL=https://github.com/LyraVoid/FolkTool
+AppSupportURL=https://github.com/LyraVoid/FolkTool/issues
+AppUpdatesURL=https://github.com/LyraVoid/FolkTool/releases
 DefaultDirName={#DefaultInstallDir}
 DisableDirPage=no
 DefaultGroupName={#MyAppName}
@@ -41,7 +44,8 @@ OutputBaseFilename={#OutputBaseFilename}
 Compression={#CompressionAlgo}
 SolidCompression=yes
 WizardStyle=modern
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 UninstallDisplayIcon={app}\{#MyAppExeName}
