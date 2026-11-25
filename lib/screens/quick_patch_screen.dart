@@ -318,7 +318,7 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
                         ),
                       ),
                       Text(
-                        l10n.deviceRebooting,
+                        l10n.quickPatchComplete,
                         style: TextStyle(
                           fontSize: 12,
                           color: colorScheme.onSurfaceVariant,
@@ -334,10 +334,12 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
           OutlinedButton.icon(
             onPressed: () {
               patchProvider.reset();
-              Navigator.pop(context);
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              }
             },
             icon: const Icon(Icons.home),
-            label: Text(l10n.returnHome),
+            label: Text(l10n.home),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
