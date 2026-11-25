@@ -214,8 +214,11 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
           maxHeight: 220,
           onExport: () async {
             final device = context.read<DeviceProvider>().currentDevice;
+            final redact =
+                context.read<SettingsProvider>().redactDiagnostics;
             final path = await patchProvider.exportDiagnostics(
               deviceInfo: device,
+              redact: redact,
             );
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
