@@ -108,7 +108,9 @@ void main() {
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.delete_outline));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clear'));
+    await tester.pumpAndSettle();
     expect(cleared, isTrue);
   });
 

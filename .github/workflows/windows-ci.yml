@@ -49,7 +49,10 @@ jobs:
           Write-Host "Using APP_VERSION=$appVersion"
 
       - name: Build Windows Release
-        run: flutter build windows --release --dart-define=APP_VERSION=${{ env.APP_VERSION }}
+        shell: pwsh
+        run: |
+          Copy-Item -Force "assets\icons\icon.ico" "windows\runner\resources\app_icon.ico"
+          flutter build windows --release --dart-define=APP_VERSION=${{ env.APP_VERSION }}
 
       - name: Verify PE architecture & CRT dependencies
         shell: pwsh

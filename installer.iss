@@ -48,6 +48,7 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
+SetupIconFile=assets\icons\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]

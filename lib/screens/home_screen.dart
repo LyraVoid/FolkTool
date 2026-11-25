@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/app_semantic_colors.dart';
@@ -13,6 +14,11 @@ import 'driver_install_screen.dart';
 import 'settings_screen.dart';
 import '../generated/l10n.dart';
 
+class _SelectNavIntent extends Intent {
+  final int index;
+  const _SelectNavIntent(this.index);
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -25,6 +31,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final UpdateService _updateService = UpdateService();
   List<RecentFileEntry> _recentFiles = [];
   ReleaseInfo? _availableUpdate;
+  int _selectedNavIndex = 0;
+  bool _sidebarCollapsed = false;
 
   @override
   void initState() {
@@ -131,6 +139,31 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _selectNav(int index) {
+    if (index == _selectedNavIndex) return;
+    setState(() => _selectedNavIndex = index);
+    if (index == 0) {
+      _loadRecentFiles();
+    }
+  }
+
+  Widget _buildActivePage(BuildContext context) {
+    switch (_selectedNavIndex) {
+      case 1:
+        return const QuickPatchScreen(key: ValueKey('nav_quick'));
+      case 2:
+        return const StepPatchScreen(key: ValueKey('nav_step'));
+      case 3:
+        return const SimplePatchScreen(key: ValueKey('nav_simple'));
+      case 4:
+        return const DriverInstallScreen(key: ValueKey('nav_driver'));
+      case 5:
+        return const SettingsScreen(key: ValueKey('nav_settings'));
+      default:
+        return _buildDashboard(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = S.of(context);
@@ -138,128 +171,266 @@ class _HomeScreenState extends State<HomeScreen> {
     final themeProvider = context.watch<ThemeProvider>();
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.appName),
-        actions: [
-          PopupMenuButton<ThemeMode>(
-            icon: Icon(_themeIcon(themeProvider.themeMode)),
-            tooltip: l10n.switchTheme,
-            initialValue: themeProvider.themeMode,
-            onSelected: (mode) => themeProvider.setThemeMode(mode),
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: ThemeMode.system,
-                child: Row(
-                  children: [
-                    const Icon(Icons.brightness_auto_outlined, size: 18),
-                    const SizedBox(width: 10),
-                    Text(l10n.themeSystem),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: ThemeMode.light,
-                child: Row(
-                  children: [
-                    const Icon(Icons.light_mode_outlined, size: 18),
-                    const SizedBox(width: 10),
-                    Text(l10n.themeLight),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: ThemeMode.dark,
-                child: Row(
-                  children: [
-                    const Icon(Icons.dark_mode_outlined, size: 18),
-                    const SizedBox(width: 10),
-                    Text(l10n.themeDark),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.language),
-            onPressed: () => localeProvider.toggleLanguage(),
-            tooltip: localeProvider.isZh
-                ? l10n.switchToEnglish
-                : l10n.switchToChinese,
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
-              await _loadRecentFiles();
-            },
-            tooltip: 'Settings',
-          ),
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: _showAboutDialog,
-            tooltip: l10n.aboutTooltip,
-          ),
-        ],
+    final destinations = <NavigationRailDestination>[
+      const NavigationRailDestination(
+        icon: Icon(Icons.dashboard_outlined),
+        selectedIcon: Icon(Icons.dashboard_rounded),
+        label: Text('Dashboard'),
       ),
-      body: Scrollbar(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 840),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_availableUpdate != null) ...[
-                    Card(
-                      color: colorScheme.primaryContainer.withValues(alpha: 0.45),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
+      NavigationRailDestination(
+        icon: const Icon(Icons.flash_on_outlined),
+        selectedIcon: const Icon(Icons.flash_on_rounded),
+        label: Text(l10n.quickPatch),
+      ),
+      NavigationRailDestination(
+        icon: const Icon(Icons.list_alt_outlined),
+        selectedIcon: const Icon(Icons.list_alt_rounded),
+        label: Text(l10n.stepPatch),
+      ),
+      NavigationRailDestination(
+        icon: const Icon(Icons.build_circle_outlined),
+        selectedIcon: const Icon(Icons.build_circle_rounded),
+        label: Text(l10n.simplePatch),
+      ),
+      NavigationRailDestination(
+        icon: const Icon(Icons.usb_outlined),
+        selectedIcon: const Icon(Icons.usb_rounded),
+        label: Text(l10n.driverInstall),
+      ),
+      const NavigationRailDestination(
+        icon: Icon(Icons.settings_outlined),
+        selectedIcon: Icon(Icons.settings_rounded),
+        label: Text('Settings'),
+      ),
+    ];
+
+    return Shortcuts(
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.digit1, control: true):
+            _SelectNavIntent(0),
+        SingleActivator(LogicalKeyboardKey.digit2, control: true):
+            _SelectNavIntent(1),
+        SingleActivator(LogicalKeyboardKey.digit3, control: true):
+            _SelectNavIntent(2),
+        SingleActivator(LogicalKeyboardKey.digit4, control: true):
+            _SelectNavIntent(3),
+        SingleActivator(LogicalKeyboardKey.digit5, control: true):
+            _SelectNavIntent(4),
+        SingleActivator(LogicalKeyboardKey.comma, control: true):
+            _SelectNavIntent(5),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _SelectNavIntent: CallbackAction<_SelectNavIntent>(
+            onInvoke: (intent) {
+              _selectNav(intent.index);
+              return null;
+            },
+          ),
+        },
+        child: Focus(
+          autofocus: true,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 1024;
+              final isMedium = constraints.maxWidth >= 720;
+
+              return Scaffold(
+                appBar: AppBar(
+                  title: Text(l10n.appName),
+                  leading: isMedium
+                      ? IconButton(
+                          icon: Icon(
+                            _sidebarCollapsed || !isWide
+                                ? Icons.menu_open_rounded
+                                : Icons.menu_rounded,
+                          ),
+                          tooltip: 'Toggle Navigation',
+                          onPressed: () => setState(
+                              () => _sidebarCollapsed = !_sidebarCollapsed),
+                        )
+                      : null,
+                  actions: [
+                    PopupMenuButton<ThemeMode>(
+                      icon: Icon(_themeIcon(themeProvider.themeMode)),
+                      tooltip: l10n.switchTheme,
+                      initialValue: themeProvider.themeMode,
+                      onSelected: (mode) => themeProvider.setThemeMode(mode),
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: ThemeMode.system,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.brightness_auto_outlined,
+                                  size: 18),
+                              const SizedBox(width: 10),
+                              Text(l10n.themeSystem),
+                            ],
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.system_update_alt,
-                              color: colorScheme.primary,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'New version available: ${_availableUpdate!.tagName}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () => launchUrl(
-                                Uri.parse(_availableUpdate!.htmlUrl),
-                                mode: LaunchMode.externalApplication,
-                              ),
-                              child: const Text('Download'),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 18),
-                              tooltip: 'Dismiss',
-                              onPressed: () => setState(() {
-                                _availableUpdate = null;
-                              }),
-                            ),
-                          ],
+                        PopupMenuItem(
+                          value: ThemeMode.light,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.light_mode_outlined, size: 18),
+                              const SizedBox(width: 10),
+                              Text(l10n.themeLight),
+                            ],
+                          ),
                         ),
+                        PopupMenuItem(
+                          value: ThemeMode.dark,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.dark_mode_outlined, size: 18),
+                              const SizedBox(width: 10),
+                              Text(l10n.themeDark),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.language),
+                      onPressed: () => localeProvider.toggleLanguage(),
+                      tooltip: localeProvider.isZh
+                          ? l10n.switchToEnglish
+                          : l10n.switchToChinese,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined),
+                      onPressed: () => _selectNav(5),
+                      tooltip: 'Settings (Ctrl+,)',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.info_outline),
+                      onPressed: _showAboutDialog,
+                      tooltip: l10n.aboutTooltip,
+                    ),
+                  ],
+                ),
+                body: Row(
+                  children: [
+                    if (isMedium) ...[
+                      NavigationRail(
+                        extended: isWide && !_sidebarCollapsed,
+                        selectedIndex: _selectedNavIndex,
+                        onDestinationSelected: _selectNav,
+                        destinations: destinations,
+                      ),
+                      VerticalDivider(
+                        width: 1,
+                        thickness: 1,
+                        color: colorScheme.outlineVariant,
+                      ),
+                    ],
+                    Expanded(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 160),
+                        child: _buildActivePage(context),
                       ),
                     ),
-                    const SizedBox(height: 16),
                   ],
+                ),
+                bottomNavigationBar: isMedium
+                    ? null
+                    : NavigationBar(
+                        selectedIndex: _selectedNavIndex,
+                        onDestinationSelected: _selectNav,
+                        destinations: [
+                          const NavigationDestination(
+                            icon: Icon(Icons.dashboard_outlined),
+                            label: 'Home',
+                          ),
+                          NavigationDestination(
+                            icon: const Icon(Icons.flash_on_outlined),
+                            label: l10n.quickPatch,
+                          ),
+                          NavigationDestination(
+                            icon: const Icon(Icons.list_alt_outlined),
+                            label: l10n.stepPatch,
+                          ),
+                          const NavigationDestination(
+                            icon: Icon(Icons.build_circle_outlined),
+                            label: 'Local',
+                          ),
+                          NavigationDestination(
+                            icon: const Icon(Icons.usb_outlined),
+                            label: l10n.driverInstall,
+                          ),
+                          const NavigationDestination(
+                            icon: Icon(Icons.settings_outlined),
+                            label: 'Settings',
+                          ),
+                        ],
+                      ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDashboard(BuildContext context) {
+    final l10n = S.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Scrollbar(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 880),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_availableUpdate != null) ...[
+                  Card(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.45),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.system_update_alt,
+                            color: colorScheme.primary,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'New version available: ${_availableUpdate!.tagName}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => launchUrl(
+                              Uri.parse(_availableUpdate!.htmlUrl),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            child: const Text('Download'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            tooltip: 'Dismiss',
+                            onPressed: () => setState(() {
+                              _availableUpdate = null;
+                            }),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 const DeviceStatusCard(),
                 const ClientCheckCard(),
                 const SizedBox(height: 20),
@@ -287,11 +458,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 10),
                   _buildRecentFiles(context),
                 ],
-              ),
+              ],
             ),
           ),
         ),
-      ),
       ),
     );
   }
