@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../models/models.dart';
+import '../config/app_semantic_colors.dart';
 import '../generated/l10n.dart';
+import '../models/models.dart';
 
 class LogConsole extends StatefulWidget {
   final List<LogEntry> logs;
@@ -14,7 +15,7 @@ class LogConsole extends StatefulWidget {
     super.key,
     required this.logs,
     this.autoScroll = true,
-    this.maxHeight = 240,
+    this.maxHeight = 280,
     this.onClear,
     this.onExport,
   });
@@ -25,11 +26,33 @@ class LogConsole extends StatefulWidget {
 
 class _LogConsoleState extends State<LogConsole> {
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  LogLevel? _levelFilter;
+  late bool _autoScrollEnabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoScrollEnabled = widget.autoScroll;
+  }
+
+  List<LogEntry> get _filteredLogs {
+    return widget.logs.where((log) {
+      if (_levelFilter != null && log.level != _levelFilter) return false;
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase();
+        return log.message.toLowerCase().contains(q) ||
+            (log.stage?.toLowerCase().contains(q) ?? false);
+      }
+      return true;
+    }).toList();
+  }
 
   @override
   void didUpdateWidget(LogConsole oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.autoScroll && widget.logs.length != oldWidget.logs.length) {
+    if (_autoScrollEnabled && widget.logs.length != oldWidget.logs.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -45,17 +68,44 @@ class _LogConsoleState extends State<LogConsole> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _copyLogs(BuildContext context) async {
+  Future<void> _copyLogs(BuildContext context, List<LogEntry> entries) async {
     final l10n = S.of(context);
-    final text = widget.logs.map((e) => e.toFormattedString()).join('\n');
+    final text = entries.map((e) => e.toFormattedString()).join('\n');
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.logsCopied)),
       );
+    }
+  }
+
+  Future<void> _confirmClear(BuildContext context) async {
+    if (widget.onClear == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear Logs?'),
+        content: const Text(
+          'This will clear the visible operation log entries for the current session.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      widget.onClear?.call();
     }
   }
 
@@ -85,25 +135,61 @@ class _LogConsoleState extends State<LogConsole> {
     }
   }
 
+  Widget _buildLevelFilterChip(String label, LogLevel? level) {
+    final selected = _levelFilter == level;
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: InkWell(
+        onTap: () => setState(() => _levelFilter = level),
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: selected
+                ? Colors.white.withValues(alpha: 0.16)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.xs),
+            border: Border.all(
+              color: selected
+                  ? Colors.white.withValues(alpha: 0.3)
+                  : Colors.white.withValues(alpha: 0.1),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.white : Colors.grey[400],
+              fontSize: 10.5,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = S.of(context);
     final colorScheme = Theme.of(context).colorScheme;
+    final semantic = context.semantic;
+    final visibleLogs = _filteredLogs;
 
     return Container(
       constraints: BoxConstraints(maxHeight: widget.maxHeight),
       decoration: BoxDecoration(
-        color: const Color(0xFF14171C),
-        borderRadius: BorderRadius.circular(12),
+        color: semantic.terminalBackground,
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: const BoxDecoration(
-              color: Color(0xFF1E222A),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+            decoration: BoxDecoration(
+              color: semantic.terminalHeader,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(11)),
             ),
             child: Row(
               children: [
@@ -112,36 +198,57 @@ class _LogConsoleState extends State<LogConsole> {
                 Text(
                   l10n.logOutput,
                   style: TextStyle(
-                    color: Colors.grey[300],
+                    color: semantic.terminalForeground,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    '${widget.logs.length} ${l10n.logEntries}',
+                    '${visibleLogs.length}/${widget.logs.length} ${l10n.logEntries}',
                     style: TextStyle(color: Colors.grey[400], fontSize: 10),
                   ),
                 ),
                 const Spacer(),
+                IconButton(
+                  icon: Icon(
+                    _autoScrollEnabled
+                        ? Icons.vertical_align_bottom
+                        : Icons.pause_circle_outline,
+                    size: 16,
+                    color: _autoScrollEnabled
+                        ? Colors.greenAccent.shade200
+                        : Colors.grey[400],
+                  ),
+                  tooltip: _autoScrollEnabled
+                      ? 'Auto-scroll On'
+                      : 'Auto-scroll Off',
+                  onPressed: () =>
+                      setState(() => _autoScrollEnabled = !_autoScrollEnabled),
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
+                ),
                 if (widget.logs.isNotEmpty) ...[
+                  const SizedBox(width: 4),
                   IconButton(
                     icon: Icon(Icons.copy_all, size: 16, color: Colors.grey[400]),
                     tooltip: l10n.copyLogs,
-                    onPressed: () => _copyLogs(context),
+                    onPressed: () => _copyLogs(context, visibleLogs),
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(),
                   ),
                   if (widget.onExport != null) ...[
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: Icon(Icons.download_outlined, size: 16, color: Colors.grey[400]),
+                      icon: Icon(Icons.download_outlined,
+                          size: 16, color: Colors.grey[400]),
                       tooltip: 'Export Logs',
                       onPressed: widget.onExport,
                       padding: const EdgeInsets.all(4),
@@ -151,9 +258,10 @@ class _LogConsoleState extends State<LogConsole> {
                   if (widget.onClear != null) ...[
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: Icon(Icons.delete_outline, size: 16, color: Colors.grey[400]),
+                      icon: Icon(Icons.delete_outline,
+                          size: 16, color: Colors.grey[400]),
                       tooltip: l10n.clearLogs,
-                      onPressed: widget.onClear,
+                      onPressed: () => _confirmClear(context),
                       padding: const EdgeInsets.all(4),
                       constraints: const BoxConstraints(),
                     ),
@@ -162,20 +270,84 @@ class _LogConsoleState extends State<LogConsole> {
               ],
             ),
           ),
+          if (widget.logs.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: semantic.terminalHeader.withValues(alpha: 0.7),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 26,
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (v) => setState(() => _searchQuery = v),
+                        style: TextStyle(
+                          color: semantic.terminalForeground,
+                          fontSize: 11.5,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Filter logs...',
+                          hintStyle:
+                              TextStyle(color: Colors.grey[500], fontSize: 11),
+                          prefixIcon: Icon(Icons.search,
+                              size: 14, color: Colors.grey[500]),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(Icons.close,
+                                      size: 13, color: Colors.grey[400]),
+                                  padding: EdgeInsets.zero,
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                )
+                              : null,
+                          isDense: true,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 4),
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: 0.06),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.xs),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildLevelFilterChip('All', null),
+                  _buildLevelFilterChip('Info', LogLevel.info),
+                  _buildLevelFilterChip('OK', LogLevel.success),
+                  _buildLevelFilterChip('Warn', LogLevel.warning),
+                  _buildLevelFilterChip('Err', LogLevel.error),
+                ],
+              ),
+            ),
           Expanded(
-            child: widget.logs.isEmpty
+            child: visibleLogs.isEmpty
                 ? Center(
                     child: Text(
-                      l10n.noLogs,
+                      widget.logs.isEmpty
+                          ? l10n.noLogs
+                          : 'No logs match the current filter.',
                       style: TextStyle(color: Colors.grey[500], fontSize: 12),
                     ),
                   )
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(10),
-                    itemCount: widget.logs.length,
+                    itemCount: visibleLogs.length,
                     itemBuilder: (context, index) {
-                      final log = widget.logs[index];
+                      final log = visibleLogs[index];
                       return RepaintBoundary(
                         child: Padding(
                           padding: const EdgeInsets.only(bottom: 4),
