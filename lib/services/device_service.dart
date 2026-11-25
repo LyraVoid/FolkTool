@@ -25,6 +25,7 @@ class DeviceService {
         return [];
       }
       final result = await _runAdb(['devices'], onLog: onLog);
+      if (result.exitCode != 0) return [];
       final lines = result.stdout.toString().split('\n');
       final devices = <DeviceInfo>[];
 
@@ -58,6 +59,7 @@ class DeviceService {
         return [];
       }
       final result = await _runFastboot(['devices'], onLog: onLog);
+      if (result.exitCode != 0) return [];
       final lines = result.stdout.toString().split('\n');
       final devices = <DeviceInfo>[];
 
@@ -220,7 +222,23 @@ class DeviceService {
     LogCallback? onLog,
   }) async {
     try {
-      final absolutePath = File(imagePath).absolute.path;
+      final imageFile = File(imagePath);
+      if (!await imageFile.exists()) {
+        onLog?.call('Boot image file not found: $imagePath');
+        return false;
+      }
+
+      if (serial == null) {
+        final devices = await getFastbootDevices(onLog: onLog);
+        if (devices.length != 1) {
+          onLog?.call(
+            'Refusing to flash: expected 1 fastboot device, found ${devices.length}.',
+          );
+          return false;
+        }
+      }
+
+      final absolutePath = imageFile.absolute.path;
       onLog?.call(S.current.logFlashingBootPath(absolutePath));
 
       final args = <String>[
@@ -518,7 +536,9 @@ class DeviceService {
     bool duringFlash = false,
   }) {
     final lower = rawError.toLowerCase();
-    if (lower.contains('locked') || lower.contains('unlock')) {
+    if (lower.contains('locked') ||
+        lower.contains('unlock') ||
+        lower.contains('lock state')) {
       return AppError(
         category: AppErrorCategory.fastboot,
         title: 'Bootloader Is Locked',
