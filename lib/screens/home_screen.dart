@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/app_semantic_colors.dart';
 import '../config/constants.dart';
 import '../providers/providers.dart';
 import '../services/services.dart';
@@ -10,6 +10,7 @@ import 'quick_patch_screen.dart';
 import 'step_patch_screen.dart';
 import 'simple_patch_screen.dart';
 import 'driver_install_screen.dart';
+import 'settings_screen.dart';
 import '../generated/l10n.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -22,7 +23,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final FileService _fileService = FileService();
   final UpdateService _updateService = UpdateService();
-  List<String> _recentFiles = [];
+  List<RecentFileEntry> _recentFiles = [];
   ReleaseInfo? _availableUpdate;
 
   @override
@@ -33,12 +34,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initData() async {
     final deviceProvider = context.read<DeviceProvider>();
+    final settingsProvider = context.read<SettingsProvider>();
 
     await deviceProvider.checkDriver();
-    deviceProvider.startMonitoring();
+    if (settingsProvider.autoMonitorDevices) {
+      deviceProvider.startMonitoring();
+    } else {
+      await deviceProvider.refreshDevices();
+    }
 
     await _loadRecentFiles();
-    _checkForUpdates();
+    if (settingsProvider.checkUpdatesOnLaunch) {
+      _checkForUpdates();
+    }
   }
 
   Future<void> _checkForUpdates() async {
@@ -50,11 +58,37 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadRecentFiles() async {
-    final files = await _fileService.getRecentFiles();
+    final files = await _fileService.getRecentFileDetails();
     if (mounted) {
       setState(() {
         _recentFiles = files;
       });
+    }
+  }
+
+  Future<void> _confirmClearRecentFiles() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear Recent Files?'),
+        content: const Text(
+          'This removes entries from the Recent Files list. Your actual files on disk will not be deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _fileService.clearRecentFiles();
+      await _loadRecentFiles();
     }
   }
 
@@ -154,6 +188,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 : l10n.switchToChinese,
           ),
           IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+              await _loadRecentFiles();
+            },
+            tooltip: 'Settings',
+          ),
+          IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: _showAboutDialog,
             tooltip: l10n.aboutTooltip,
@@ -221,18 +266,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildModeSelection(context),
                 if (_recentFiles.isNotEmpty) ...[
                   const SizedBox(height: 24),
-                  Text(
-                    l10n.recentFiles,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        l10n.recentFiles,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: _confirmClearRecentFiles,
+                        icon: const Icon(Icons.clear_all, size: 16),
+                        label: const Text('Clear All'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
                   _buildRecentFiles(context),
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -389,38 +444,106 @@ class _HomeScreenState extends State<HomeScreen> {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
-        children: _recentFiles.take(5).map((file) {
-          final fileName = p.basename(file);
+        children: _recentFiles.take(5).map((entry) {
           return ListTile(
             leading: Icon(
-              Icons.insert_drive_file_outlined,
-              color: colorScheme.onSurfaceVariant,
+              entry.exists
+                  ? Icons.insert_drive_file_outlined
+                  : Icons.broken_image_outlined,
+              color: entry.exists
+                  ? colorScheme.onSurfaceVariant
+                  : colorScheme.error,
             ),
-            title: Text(
-              fileName,
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurface,
-              ),
+            title: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    entry.fileName,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: entry.exists
+                          ? colorScheme.onSurface
+                          : colorScheme.onSurfaceVariant,
+                      decoration:
+                          entry.exists ? null : TextDecoration.lineThrough,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (entry.exists
+                            ? colorScheme.primary
+                            : colorScheme.error)
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(AppRadius.xs),
+                  ),
+                  child: Text(
+                    entry.exists ? entry.formattedSize : 'Missing',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                      color: entry.exists
+                          ? colorScheme.primary
+                          : colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
             ),
             subtitle: Text(
-              file,
+              entry.path,
               style: TextStyle(
                 fontSize: 11,
                 color: colorScheme.onSurfaceVariant,
               ),
               overflow: TextOverflow.ellipsis,
             ),
-            trailing: Icon(
-              Icons.arrow_forward_ios,
-              size: 14,
-              color: colorScheme.onSurfaceVariant,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (entry.exists)
+                  IconButton(
+                    icon: const Icon(Icons.folder_open_outlined, size: 18),
+                    tooltip: 'Open File Location',
+                    onPressed: () => _fileService.openFileLocation(entry.path),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  tooltip: 'Remove from list',
+                  onPressed: () async {
+                    await _fileService.removeRecentFile(entry.path);
+                    await _loadRecentFiles();
+                  },
+                ),
+                if (entry.exists)
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+              ],
             ),
-            onTap: () {
-              final patchProvider = context.read<PatchProvider>();
-              patchProvider.setSelectedFile(file);
-              _navigateToQuickPatch();
-            },
+            onTap: entry.exists
+                ? () {
+                    final patchProvider = context.read<PatchProvider>();
+                    patchProvider.setSelectedFile(entry.path);
+                    _navigateToQuickPatch();
+                  }
+                : () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'This file no longer exists on disk. You can remove it from the list.',
+                        ),
+                      ),
+                    );
+                  },
           );
         }).toList(),
       ),
