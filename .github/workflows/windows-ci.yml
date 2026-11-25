@@ -48,7 +48,18 @@ jobs:
           }
 
       - name: Run widget & unit tests
-        run: flutter test --reporter expanded
+        shell: pwsh
+        run: |
+          $out = flutter test --reporter expanded 2>&1 | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0) {
+            foreach ($line in ($out -split "`r?`n")) {
+              if ($line -match "\[E\]|Expected:|Actual:|EXCEPTION|Error:|failed") {
+                Write-Host "::error::$line"
+              }
+            }
+            exit 1
+          }
 
       - name: Extract app version from pubspec.yaml
         shell: pwsh
