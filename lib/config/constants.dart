@@ -8,7 +8,7 @@ class Constants {
       String.fromEnvironment('APP_VERSION', defaultValue: '1.7.0');
   static String get appName => 'FolkTool';
   static String get appFullName => 'FolkTool - KernelPatch 自动刷入工具';
-  static const String githubRepoOwner = 'rebeeh';
+  static const String githubRepoOwner = 'LyraVoid';
   static const String githubRepoName = 'FolkTool';
   
   static String get _exeDir => File(Platform.resolvedExecutable).parent.path;

@@ -1,7 +1,7 @@
 # FolkTool
 
-[![Windows CI](https://github.com/rebeeh/FolkTool/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/rebeeh/FolkTool/actions/workflows/windows-ci.yml)
-[![Latest Release](https://img.shields.io/github/v/release/rebeeh/FolkTool?include_prereleases)](https://github.com/rebeeh/FolkTool/releases/latest)
+[![Windows CI](https://github.com/LyraVoid/FolkTool/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/LyraVoid/FolkTool/actions/workflows/windows-ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/LyraVoid/FolkTool?include_prereleases)](https://github.com/LyraVoid/FolkTool/releases/latest)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20x64-0078D6.svg)](#)
 
@@ -44,7 +44,7 @@ FolkTool is a fast Root flashing tool designed specifically for FolkPatch and AP
 
 ### 📦 Usage Guide
 
-1. **Download:** Download the latest `FolkTool-Setup.exe` or portable ZIP from the [Release Page](https://github.com/rebeeh/FolkTool/releases/latest)
+1. **Download:** Download the latest `FolkTool-Setup.exe` or portable ZIP from the [Release Page](https://github.com/LyraVoid/FolkTool/releases/latest)
 
 2. **Install:** Run the installer and complete the installation following the wizard
 
@@ -109,7 +109,7 @@ Using this tool may cause device bricking, data loss, or void warranty. Please b
 ### FolkTool Discussion
 
 - Telegram Channel: [@FolkTool](https://t.me/FolkPatch)
-- GitHub Issues: [Submit Issues](https://github.com/rebeeh/FolkTool/issues)
+- GitHub Issues: [Submit Issues](https://github.com/LyraVoid/FolkTool/issues)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📝 Changelog

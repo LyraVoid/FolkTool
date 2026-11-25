@@ -1,7 +1,7 @@
 # FolkTool
 
-[![Windows CI](https://github.com/rebeeh/FolkTool/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/rebeeh/FolkTool/actions/workflows/windows-ci.yml)
-[![Latest Release](https://img.shields.io/github/v/release/rebeeh/FolkTool?include_prereleases)](https://github.com/rebeeh/FolkTool/releases/latest)
+[![Windows CI](https://github.com/LyraVoid/FolkTool/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/LyraVoid/FolkTool/actions/workflows/windows-ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/LyraVoid/FolkTool?include_prereleases)](https://github.com/LyraVoid/FolkTool/releases/latest)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20x64-0078D6.svg)](#)
 
@@ -44,7 +44,7 @@ FolkTool 是一个专为 FolkPatch 和 APatch 设计的快速 Root 刷入工具�
 
 ### 📦 使用指导
 
-1. **下载安装：** 从 [发布页面](https://github.com/rebeeh/FolkTool/releases/latest) 下载最新版 FolkTool-Setup.exe 或便携版 ZIP
+1. **下载安装：** 从 [发布页面](https://github.com/LyraVoid/FolkTool/releases/latest) 下载最新版 FolkTool-Setup.exe 或便携版 ZIP
 
 2. **安装程序：** 运行安装程序，按照向导完成安装
 
@@ -109,7 +109,7 @@ FolkTool 遵循 [GNU General Public License v3 (GPL-3)](http://www.gnu.org/copyl
 ### FolkTool 讨论交流
 
 - Telegram 频道: [@FolkTool](https://t.me/FolkPatch)
-- GitHub Issues: [提交问题](https://github.com/rebeeh/FolkTool/issues)
+- GitHub Issues: [提交问题](https://github.com/LyraVoid/FolkTool/issues)
 - 贡献指南: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📝 更新日志

@@ -12,7 +12,7 @@ Thank you for contributing to **FolkTool**!
 ## Local Development Setup
 
 ```powershell
-git clone https://github.com/rebeeh/FolkTool.git
+git clone https://github.com/LyraVoid/FolkTool.git
 cd FolkTool
 flutter pub get
 flutter analyze --no-fatal-infos
