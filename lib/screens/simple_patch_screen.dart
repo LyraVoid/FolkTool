@@ -133,8 +133,11 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
                       maxHeight: 250,
                       onExport: () async {
                         final device = context.read<DeviceProvider>().currentDevice;
+                        final redact =
+                            context.read<SettingsProvider>().redactDiagnostics;
                         final path = await patchProvider.exportDiagnostics(
                           deviceInfo: device,
+                          redact: redact,
                         );
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -326,52 +329,61 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: colorScheme.errorContainer.withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: colorScheme.error.withValues(alpha: 0.4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.error, color: colorScheme.error),
-                    const SizedBox(width: 12),
+          if (patchProvider.lastError != null)
+            ErrorBanner(
+              error: patchProvider.lastError!,
+              onRetry: patchProvider.canSafelyRetry ? patchProvider.reset : null,
+              onDismiss: patchProvider.clearError,
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colorScheme.errorContainer.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: colorScheme.error.withValues(alpha: 0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.error, color: colorScheme.error),
+                      const SizedBox(width: 12),
+                      Text(
+                        l10n.operationFailed,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (patchProvider.errorMessage != null) ...[
+                    const SizedBox(height: 8),
                     Text(
-                      l10n.operationFailed,
+                      patchProvider.errorMessage!,
                       style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
                         color: colorScheme.onErrorContainer,
                       ),
                     ),
                   ],
-                ),
-                if (patchProvider.errorMessage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    patchProvider.errorMessage!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colorScheme.onErrorContainer,
-                    ),
-                  ),
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: patchProvider.reset,
-            icon: const Icon(Icons.refresh),
-            label: Text(l10n.retry),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
+          if (patchProvider.lastError == null && patchProvider.canSafelyRetry) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: patchProvider.reset,
+              icon: const Icon(Icons.refresh),
+              label: Text(l10n.retry),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
             ),
-          ),
+          ],
         ],
       );
     }
