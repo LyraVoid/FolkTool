@@ -8,20 +8,14 @@ import '../generated/l10n.dart';
 import 'device_provider.dart';
 import 'version_provider.dart';
 
-enum PatchOperationState {
-  idle,
-  running,
-  completed,
-  failed,
-  cancelled,
-}
+enum PatchOperationState { idle, running, completed, failed, cancelled }
 
 class PatchProvider extends ChangeNotifier {
   final KpToolsService _kptoolsService = KpToolsService();
   final FileService _fileService = FileService();
   final SafetyService _safetyService = SafetyService();
   final Uuid _uuid = const Uuid();
-  
+
   String? _selectedFilePath;
   String? _patchedFilePath;
   String? _backupFilePath;
@@ -29,11 +23,14 @@ class PatchProvider extends ChangeNotifier {
   List<OperationStep> _steps = [];
   int _currentStepIndex = -1;
   PatchOperationState _operationState = PatchOperationState.idle;
+  FlashingPhase _phase = FlashingPhase.idle;
   List<LogEntry> _logs = [];
   String? _errorMessage;
+  AppError? _lastError;
   bool _isCancelling = false;
   String _operationId = '';
-  
+  String? _activeDeviceSerial;
+
   String? get selectedFilePath => _selectedFilePath;
   String? get patchedFilePath => _patchedFilePath;
   String? get backupFilePath => _backupFilePath;
@@ -41,20 +38,33 @@ class PatchProvider extends ChangeNotifier {
   List<OperationStep> get steps => _steps;
   int get currentStepIndex => _currentStepIndex;
   PatchOperationState get operationState => _operationState;
+  FlashingPhase get phase => _phase;
   List<LogEntry> get logs => _logs;
   String? get errorMessage => _errorMessage;
+  AppError? get lastError => _lastError;
   String get operationId => _operationId;
   bool get isRunning => _operationState == PatchOperationState.running;
   bool get isCompleted => _operationState == PatchOperationState.completed;
   bool get isFailed => _operationState == PatchOperationState.failed;
-  double get progress => _steps.isEmpty ? 0 : (_currentStepIndex + 1) / _steps.length;
-  
+  bool get canSafelyRetry =>
+      _phase != FlashingPhase.uncertain && (_lastError?.canSafelyRetry ?? true);
+  double get progress =>
+      _steps.isEmpty ? 0 : (_currentStepIndex + 1) / _steps.length;
+
+  void clearError() {
+    _lastError = null;
+    _errorMessage = null;
+    notifyListeners();
+  }
+
   void setSelectedFile(String path) {
     _selectedFilePath = path;
     _patchedFilePath = null;
     _operationState = PatchOperationState.idle;
+    _phase = FlashingPhase.idle;
     _logs.clear();
     _errorMessage = null;
+    _lastError = null;
     notifyListeners();
   }
 
@@ -83,14 +93,38 @@ class PatchProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _addLog(LogLevel level, String message) {
+  void _addLog(
+    LogLevel level,
+    String message, {
+    AppErrorCategory? category,
+    String? technicalDetails,
+  }) {
     final entry = LogEntry(
       timestamp: DateTime.now(),
       level: level,
       message: message,
+      operationId: _operationId.isEmpty ? null : _operationId,
+      deviceSerial: _activeDeviceSerial,
+      stage: _phase == FlashingPhase.idle ? null : _phase.name,
+      category: category,
+      technicalDetails: technicalDetails,
     );
     _logs.add(entry);
     debugPrint(entry.toFormattedString());
+    notifyListeners();
+  }
+
+  void _failWithError(AppError error, {FlashingPhase phase = FlashingPhase.failed}) {
+    _phase = phase;
+    _operationState = PatchOperationState.failed;
+    _errorMessage = error.message;
+    _lastError = error;
+    _addLog(
+      LogLevel.error,
+      '${error.title}: ${error.message}',
+      category: error.category,
+      technicalDetails: error.technicalDetails,
+    );
     notifyListeners();
   }
 
@@ -107,56 +141,90 @@ class PatchProvider extends ChangeNotifier {
     VersionProvider versionProvider,
   ) async {
     if (_selectedFilePath == null) {
-      _errorMessage = S.current.errSelectBootFirst;
-      notifyListeners();
+      _failWithError(AppError(
+        category: AppErrorCategory.file,
+        title: 'No Boot Image Selected',
+        message: S.current.errSelectBootFirst,
+        affectedStage: 'Preflight',
+        deviceSafe: true,
+        nextSteps: 'Select a valid boot.img file first.',
+        canSafelyRetry: true,
+      ));
       return;
     }
-    
+
+    final targetDevice = deviceProvider.selectedTargetDevice;
+    _activeDeviceSerial = targetDevice?.serial;
     _operationId = _uuid.v4();
     _operationState = PatchOperationState.running;
+    _phase = FlashingPhase.preflight;
     _steps = OperationStep.getQuickPatchSteps();
     _currentStepIndex = -1;
     _logs.clear();
     _errorMessage = null;
+    _lastError = null;
     _isCancelling = false;
+    deviceProvider.setOperationLocked(true);
     notifyListeners();
-    
+
     try {
       _currentStepIndex = 0;
 
+      final connectedCount = deviceProvider.hasMultipleDevices
+          ? 2
+          : (targetDevice != null ? 1 : 0);
+
       final preflight = await _safetyService.runPreflightChecks(
         bootImagePath: _selectedFilePath!,
-        deviceInfo: deviceProvider.currentDevice,
+        deviceInfo: targetDevice,
+        batteryLevel: targetDevice?.batteryLevel,
+        checkImageMagic: true,
+        requireConnectedDevice: true,
+        connectedDeviceCount: connectedCount,
       );
       for (final warning in preflight.warnings) {
         _addLog(LogLevel.warning, warning);
       }
       if (!preflight.passed) {
         final msg = preflight.errors.join('; ');
-        _addLog(LogLevel.error, msg);
         _updateStepStatus(0, StepStatus.failed, errorMessage: msg);
-        _operationState = PatchOperationState.failed;
-        _errorMessage = msg;
-        notifyListeners();
+        _failWithError(
+          preflight.primaryError ??
+              AppError(
+                category: AppErrorCategory.imageValidation,
+                title: 'Preflight Check Failed',
+                message: msg,
+                affectedStage: 'Preflight',
+                deviceSafe: true,
+                nextSteps: 'Resolve the reported issue and try again.',
+                canSafelyRetry: true,
+              ),
+        );
         return;
       }
 
       _updateStepStatus(0, StepStatus.completed);
-      
+
       if (_isCancelling) {
+        _phase = FlashingPhase.idle;
         _operationState = PatchOperationState.cancelled;
         notifyListeners();
         return;
       }
-      
+
+      _phase = FlashingPhase.preparation;
       _currentStepIndex = 1;
       _updateStepStatus(1, StepStatus.inProgress);
       _addLog(LogLevel.info, S.current.logBackingUpBoot);
-      
+
       final backupDir = await _fileService.getBackupDirectory();
-      final timestamp = DateTime.now().toString().replaceAll(':', '-').split('.').first;
+      final timestamp = DateTime.now()
+          .toString()
+          .replaceAll(':', '-')
+          .split('.')
+          .first;
       final backupPath = p.join(backupDir, 'boot_backup_$timestamp.img');
-      
+
       if (deviceProvider.hasFastbootDevice) {
         final backupSuccess = await deviceProvider.backupBoot(
           backupPath,
@@ -172,27 +240,31 @@ class PatchProvider extends ChangeNotifier {
         }
       } else {
         try {
-          _backupFilePath = await _fileService.backupBootImage(_selectedFilePath!);
+          _backupFilePath = await _fileService.backupBootImage(
+            _selectedFilePath!,
+          );
           _addLog(LogLevel.info, S.current.logBackupComplete(_backupFilePath!));
         } catch (_) {
           _addLog(LogLevel.warning, S.current.logDeviceNotFastboot);
         }
         _updateStepStatus(1, StepStatus.completed);
       }
-      
+
       if (_isCancelling) {
+        _phase = FlashingPhase.idle;
         _operationState = PatchOperationState.cancelled;
         notifyListeners();
         return;
       }
-      
+
+      _phase = FlashingPhase.patching;
       _currentStepIndex = 2;
       _updateStepStatus(2, StepStatus.inProgress);
       _addLog(LogLevel.info, S.current.logPatchingBoot);
-      
+
       final outputDir = await _fileService.getOutputDirectory();
       _patchedFilePath = p.join(outputDir, 'boot_patched_$timestamp.img');
-      
+
       final patchResult = await _kptoolsService.patchBootImage(
         inputPath: _selectedFilePath!,
         outputPath: _patchedFilePath!,
@@ -200,55 +272,72 @@ class PatchProvider extends ChangeNotifier {
         kpVersion: versionProvider.selectedVersion,
         onLog: (line) => _addLog(LogLevel.info, line),
       );
-      
+
       if (!patchResult.success) {
-        _updateStepStatus(2, StepStatus.failed, errorMessage: patchResult.errorMessage);
-        _operationState = PatchOperationState.failed;
-        _errorMessage = patchResult.errorMessage;
-        notifyListeners();
+        _updateStepStatus(
+          2,
+          StepStatus.failed,
+          errorMessage: patchResult.errorMessage,
+        );
+        _failWithError(AppError(
+          category: AppErrorCategory.process,
+          title: 'Boot Image Patching Failed',
+          message: patchResult.errorMessage ?? 'kptools failed to patch the boot image.',
+          affectedStage: 'Patching',
+          deviceSafe: true,
+          nextSteps:
+              'Your device has not been modified. Verify your boot.img and KernelPatch version.',
+          canSafelyRetry: true,
+          technicalDetails: patchResult.errorMessage,
+        ));
         return;
       }
-      
+
       _addLog(LogLevel.success, S.current.logPatchComplete(_patchedFilePath!));
       _updateStepStatus(2, StepStatus.completed);
-      
+
       if (_isCancelling) {
+        _phase = FlashingPhase.idle;
         _operationState = PatchOperationState.cancelled;
         notifyListeners();
         return;
       }
-      
+
+      _phase = FlashingPhase.validation;
       _currentStepIndex = 3;
       _updateStepStatus(3, StepStatus.inProgress);
       _addLog(LogLevel.info, S.current.logSavingFile);
-      
+
       final savedPath = await _fileService.savePatchedImage(
         _patchedFilePath!,
         customName: 'boot_patched_$timestamp.img',
       );
       _addLog(LogLevel.success, S.current.logFileSaved(savedPath));
       _updateStepStatus(3, StepStatus.completed);
-      
+
       if (_isCancelling) {
+        _phase = FlashingPhase.idle;
         _operationState = PatchOperationState.cancelled;
         notifyListeners();
         return;
       }
-      
+
+      _phase = FlashingPhase.rebootingToFastboot;
       _currentStepIndex = 4;
       _updateStepStatus(4, StepStatus.inProgress);
-      
+
       if (!deviceProvider.hasAdbDevice) {
         _addLog(LogLevel.warning, S.current.logNoAdbDevice);
-        
+
         for (int i = 0; i < 30; i++) {
           await Future.delayed(const Duration(seconds: 2));
           if (_isCancelling) {
+            _phase = FlashingPhase.idle;
             _operationState = PatchOperationState.cancelled;
             notifyListeners();
             return;
           }
-          await deviceProvider.refreshDevices();
+          await deviceProvider.manualRefreshDevices();
           if (deviceProvider.hasFastbootDevice) {
             break;
           }
@@ -260,100 +349,187 @@ class PatchProvider extends ChangeNotifier {
           _addLog(LogLevel.warning, S.current.logAutoRebootFailed);
         }
       }
-      
+
+      _phase = FlashingPhase.fastbootDetection;
       if (!deviceProvider.hasFastbootDevice) {
         final found = await deviceProvider.waitForFastboot();
         if (!found) {
-          _updateStepStatus(4, StepStatus.failed, errorMessage: S.current.logWaitFastbootTimeout);
-          _operationState = PatchOperationState.failed;
-          _errorMessage = S.current.logWaitFastbootTimeout;
-          notifyListeners();
+          _updateStepStatus(
+            4,
+            StepStatus.failed,
+            errorMessage: S.current.logWaitFastbootTimeout,
+          );
+          _failWithError(AppError(
+            category: AppErrorCategory.fastboot,
+            title: 'Fastboot Device Not Detected',
+            message: S.current.logWaitFastbootTimeout,
+            affectedStage: 'Fastboot Detection',
+            deviceSafe: true,
+            nextSteps:
+                'Check USB cable, install Fastboot/Samsung drivers if needed, and verify device is in bootloader mode.',
+            canSafelyRetry: true,
+          ));
           return;
         }
       }
-      
+
       _addLog(LogLevel.success, S.current.logDeviceInFastboot);
       _updateStepStatus(4, StepStatus.completed);
-      
+
       if (_isCancelling) {
+        _phase = FlashingPhase.idle;
         _operationState = PatchOperationState.cancelled;
         notifyListeners();
         return;
       }
-      
+
+      _phase = FlashingPhase.flashing;
       _currentStepIndex = 5;
       _updateStepStatus(5, StepStatus.inProgress);
       _addLog(LogLevel.info, S.current.logFlashingBoot);
-      
+
       final flashSuccess = await deviceProvider.flashBoot(
         _patchedFilePath!,
         onLog: (line) => _addLog(LogLevel.info, line),
       );
-      
+
       if (!flashSuccess) {
-        _updateStepStatus(5, StepStatus.failed, errorMessage: S.current.logFlashFailed);
-        _operationState = PatchOperationState.failed;
-        _errorMessage = S.current.errFlashBootFailed;
-        notifyListeners();
+        _updateStepStatus(
+          5,
+          StepStatus.failed,
+          errorMessage: S.current.logFlashFailed,
+        );
+        // Critical: never auto-retry after a failed/uncertain flash write.
+        _failWithError(
+          AppError(
+            category: AppErrorCategory.flashing,
+            title: 'Boot Partition Flash Failed',
+            message: S.current.errFlashBootFailed,
+            reason:
+                'The fastboot flash command returned an error or timed out during partition write.',
+            affectedStage: 'Flashing',
+            deviceSafe: false,
+            nextSteps:
+                'Do NOT disconnect the cable blindly or repeat flashing automatically. Export diagnostics, check bootloader lock & partition logs, and use "Restore Stock Boot" if the device fails to boot.',
+            canSafelyRetry: false,
+            technicalDetails: _logs.isNotEmpty ? _logs.last.message : null,
+          ),
+          phase: FlashingPhase.uncertain,
+        );
         return;
       }
-      
+
       _addLog(LogLevel.success, S.current.logFlashSuccess);
       _updateStepStatus(5, StepStatus.completed);
-      
+
       if (_isCancelling) {
+        _phase = FlashingPhase.idle;
         _operationState = PatchOperationState.cancelled;
         notifyListeners();
         return;
       }
-      
+
+      _phase = FlashingPhase.rebootingToSystem;
       _currentStepIndex = 6;
       _updateStepStatus(6, StepStatus.inProgress);
       _addLog(LogLevel.info, S.current.logRebootingDevice);
-      
+
       await Future.delayed(const Duration(seconds: 2));
       final rebootSuccess = await deviceProvider.rebootDevice(
         onLog: (line) => _addLog(LogLevel.info, line),
       );
-      
+
+      _phase = FlashingPhase.verification;
       if (rebootSuccess) {
         _addLog(LogLevel.success, S.current.logRebootSuccess);
       } else {
         _addLog(LogLevel.warning, S.current.logAutoRebootFailed2);
       }
       _updateStepStatus(6, StepStatus.completed);
-      
+
+      _phase = FlashingPhase.completed;
       _operationState = PatchOperationState.completed;
       _addLog(LogLevel.success, S.current.logOneClickComplete);
       notifyListeners();
-      
     } catch (e) {
-      _operationState = PatchOperationState.failed;
-      _errorMessage = e.toString();
-      _addLog(LogLevel.error, S.current.logOperationError(e));
-      notifyListeners();
+      _failWithError(
+        AppError(
+          category: AppErrorCategory.application,
+          title: 'Unexpected Operation Error',
+          message: e.toString(),
+          affectedStage: _phase.name,
+          deviceSafe: _phase != FlashingPhase.flashing,
+          nextSteps: 'Export diagnostics and inspect logs before retrying.',
+          canSafelyRetry: _phase != FlashingPhase.flashing,
+          technicalDetails: e.toString(),
+        ),
+        phase: _phase == FlashingPhase.flashing
+            ? FlashingPhase.uncertain
+            : FlashingPhase.failed,
+      );
+    } finally {
+      deviceProvider.setOperationLocked(false);
     }
   }
 
   Future<bool> patchOnly(VersionProvider versionProvider) async {
     if (_selectedFilePath == null) {
-      _errorMessage = S.current.errSelectBootFirst;
-      notifyListeners();
+      _failWithError(AppError(
+        category: AppErrorCategory.file,
+        title: 'No Boot Image Selected',
+        message: S.current.errSelectBootFirst,
+        affectedStage: 'Preflight',
+        deviceSafe: true,
+        nextSteps: 'Select a valid boot.img file first.',
+        canSafelyRetry: true,
+      ));
       return false;
     }
-    
+
+    _operationId = _uuid.v4();
     _operationState = PatchOperationState.running;
+    _phase = FlashingPhase.preflight;
     _logs.clear();
     _errorMessage = null;
+    _lastError = null;
     notifyListeners();
-    
+
     _addLog(LogLevel.info, S.current.logStartPatching);
-    
+
     try {
-      final timestamp = DateTime.now().toString().replaceAll(':', '-').split('.').first;
+      final preflight = await _safetyService.runPreflightChecks(
+        bootImagePath: _selectedFilePath!,
+        checkImageMagic: true,
+        requireConnectedDevice: false,
+      );
+      for (final warning in preflight.warnings) {
+        _addLog(LogLevel.warning, warning);
+      }
+      if (!preflight.passed) {
+        _failWithError(
+          preflight.primaryError ??
+              AppError(
+                category: AppErrorCategory.imageValidation,
+                title: 'Preflight Check Failed',
+                message: preflight.errors.join('; '),
+                affectedStage: 'Preflight',
+                deviceSafe: true,
+                nextSteps: 'Verify your boot.img file and try again.',
+                canSafelyRetry: true,
+              ),
+        );
+        return false;
+      }
+
+      _phase = FlashingPhase.patching;
+      final timestamp = DateTime.now()
+          .toString()
+          .replaceAll(':', '-')
+          .split('.')
+          .first;
       final outputDir = await _fileService.getOutputDirectory();
       _patchedFilePath = p.join(outputDir, 'boot_patched_$timestamp.img');
-      
+
       final result = await _kptoolsService.patchBootImage(
         inputPath: _selectedFilePath!,
         outputPath: _patchedFilePath!,
@@ -361,24 +537,40 @@ class PatchProvider extends ChangeNotifier {
         kpVersion: versionProvider.selectedVersion,
         onLog: (line) => _addLog(LogLevel.info, line),
       );
-      
+
       if (result.success) {
+        _phase = FlashingPhase.completed;
         _operationState = PatchOperationState.completed;
-        _addLog(LogLevel.success, S.current.logPatchComplete(_patchedFilePath!));
+        _addLog(
+          LogLevel.success,
+          S.current.logPatchComplete(_patchedFilePath!),
+        );
         notifyListeners();
         return true;
       } else {
-        _operationState = PatchOperationState.failed;
-        _errorMessage = result.errorMessage;
-        _addLog(LogLevel.error, S.current.logPatchFailed(result.errorMessage ?? ''));
-        notifyListeners();
+        _failWithError(AppError(
+          category: AppErrorCategory.process,
+          title: 'Boot Image Patching Failed',
+          message: result.errorMessage ?? 'kptools failed to patch the boot image.',
+          affectedStage: 'Patching',
+          deviceSafe: true,
+          nextSteps: 'Verify your boot.img and KernelPatch version.',
+          canSafelyRetry: true,
+          technicalDetails: result.errorMessage,
+        ));
         return false;
       }
     } catch (e) {
-      _operationState = PatchOperationState.failed;
-      _errorMessage = e.toString();
-      _addLog(LogLevel.error, S.current.logPatchException(e));
-      notifyListeners();
+      _failWithError(AppError(
+        category: AppErrorCategory.process,
+        title: 'Patching Error',
+        message: S.current.logPatchException(e),
+        affectedStage: 'Patching',
+        deviceSafe: true,
+        nextSteps: 'Inspect the logs and try again.',
+        canSafelyRetry: true,
+        technicalDetails: e.toString(),
+      ));
       return false;
     }
   }
@@ -396,8 +588,11 @@ class PatchProvider extends ChangeNotifier {
     _steps = [];
     _currentStepIndex = -1;
     _operationState = PatchOperationState.idle;
+    _phase = FlashingPhase.idle;
     _logs.clear();
     _errorMessage = null;
+    _lastError = null;
+    _activeDeviceSerial = null;
     _isCancelling = false;
     notifyListeners();
   }
@@ -407,10 +602,14 @@ class PatchProvider extends ChangeNotifier {
     return await _fileService.saveLogFile(content);
   }
 
-  Future<String> exportDiagnostics({DeviceInfo? deviceInfo}) async {
+  Future<String> exportDiagnostics({
+    DeviceInfo? deviceInfo,
+    bool redact = true,
+  }) async {
     return await _fileService.exportDiagnosticBundle(
       logs: _logs,
       deviceInfo: deviceInfo,
+      redact: redact,
     );
   }
 
