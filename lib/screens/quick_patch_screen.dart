@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/services.dart';
 import '../widgets/widgets.dart';
@@ -40,12 +41,53 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
     final patchProvider = context.read<PatchProvider>();
     final deviceProvider = context.read<DeviceProvider>();
     final versionProvider = context.read<VersionProvider>();
+    final settingsProvider = context.read<SettingsProvider>();
 
     if (patchProvider.selectedFilePath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.pleaseSelectFile)),
       );
       return;
+    }
+
+    if (settingsProvider.confirmBeforeFlash) {
+      final target = deviceProvider.selectedTargetDevice;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Confirm One-Click Flash'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Target Device: ${target != null ? '${target.model ?? target.serial} (${target.stateText})' : 'None detected'}',
+              ),
+              const SizedBox(height: 6),
+              Text('Boot Image: ${patchProvider.selectedFilePath}'),
+              const SizedBox(height: 6),
+              Text(
+                'KernelPatch Version: ${versionProvider.selectedVersion ?? 'Default'}',
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'This will patch the boot image, reboot to Fastboot, and flash the boot partition. Ensure your bootloader is unlocked and do not disconnect USB during flashing.',
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Start Flashing'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
     }
 
     setState(() {
@@ -112,7 +154,15 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
                     const SizedBox(height: 20),
                     if (patchProvider.steps.isNotEmpty) ...[
                       const Divider(),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
+                      if (patchProvider.phase != FlashingPhase.idle)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Phase: ${patchProvider.phase.name}',
+                            style: Theme.of(context).textTheme.labelMedium,
+                          ),
+                        ),
                       StepProgress(
                         steps: patchProvider.steps,
                         currentIndex: patchProvider.currentStepIndex,
@@ -126,8 +176,11 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
                       maxHeight: 250,
                       onExport: () async {
                         final device = context.read<DeviceProvider>().currentDevice;
+                        final redact =
+                            context.read<SettingsProvider>().redactDiagnostics;
                         final path = await patchProvider.exportDiagnostics(
                           deviceInfo: device,
+                          redact: redact,
                         );
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -253,24 +306,39 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
                 const Icon(Icons.check_circle, color: Colors.green),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    l10n.quickPatchComplete,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurface,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.flashComplete,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      Text(
+                        l10n.deviceRebooting,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: patchProvider.reset,
-            icon: const Icon(Icons.refresh),
-            label: Text(l10n.restart),
-            style: FilledButton.styleFrom(
+          OutlinedButton.icon(
+            onPressed: () {
+              patchProvider.reset();
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.home),
+            label: Text(l10n.returnHome),
+            style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           ),
@@ -282,52 +350,61 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: colorScheme.errorContainer.withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: colorScheme.error.withValues(alpha: 0.4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.error, color: colorScheme.error),
-                    const SizedBox(width: 12),
+          if (patchProvider.lastError != null)
+            ErrorBanner(
+              error: patchProvider.lastError!,
+              onRetry: patchProvider.canSafelyRetry ? patchProvider.reset : null,
+              onDismiss: patchProvider.clearError,
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colorScheme.errorContainer.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: colorScheme.error.withValues(alpha: 0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.error, color: colorScheme.error),
+                      const SizedBox(width: 12),
+                      Text(
+                        l10n.operationFailed,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (patchProvider.errorMessage != null) ...[
+                    const SizedBox(height: 8),
                     Text(
-                      l10n.operationFailed,
+                      patchProvider.errorMessage!,
                       style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
                         color: colorScheme.onErrorContainer,
                       ),
                     ),
                   ],
-                ),
-                if (patchProvider.errorMessage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    patchProvider.errorMessage!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colorScheme.onErrorContainer,
-                    ),
-                  ),
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: patchProvider.reset,
-            icon: const Icon(Icons.refresh),
-            label: Text(l10n.retry),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
+          if (patchProvider.lastError == null && patchProvider.canSafelyRetry) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: patchProvider.reset,
+              icon: const Icon(Icons.refresh),
+              label: Text(l10n.retry),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
             ),
-          ),
+          ],
           if (patchProvider.backupFilePath != null) ...[
             const SizedBox(height: 10),
             OutlinedButton.icon(
