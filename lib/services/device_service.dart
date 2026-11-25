@@ -239,11 +239,7 @@ class DeviceService {
         return false;
       }
       
-      final adbResult = await runExecutableArguments(
-        Constants.adbPath,
-        ['version'],
-        verbose: false,
-      );
+      final adbResult = await _runAdb(['version'], onLog: onLog);
       
       if (adbResult.exitCode != 0) {
         onLog?.call(S.current.errAdbNotAvailable);
@@ -257,11 +253,7 @@ class DeviceService {
         return false;
       }
       
-      final fastbootResult = await runExecutableArguments(
-        Constants.fastbootPath,
-        ['--version'],
-        verbose: false,
-      );
+      final fastbootResult = await _runFastboot(['--version'], onLog: onLog);
       
       if (fastbootResult.exitCode != 0) {
         onLog?.call(S.current.errFastbootNotAvailable);
