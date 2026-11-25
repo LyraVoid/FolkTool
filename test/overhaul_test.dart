@@ -105,7 +105,7 @@ void main() {
       expect(redacted.contains('Alice'), isFalse);
       expect(redacted.contains('R58N1234567'), isFalse);
       expect(redacted.contains('<USER>'), isTrue);
-      expect(redacted.contains('<SERIAL>'), isTrue);
+      expect(redacted.contains('<DEVICE_SERIAL>'), isTrue);
     });
 
     test('removes individual and clears all recent files', () async {
