@@ -143,9 +143,26 @@ begin
   end;
 end;
 
-function VCRedistNeedsInstallAndFileExists: Boolean;
+function VerifyMicrosoftSignature(const FilePath: String): Boolean;
+var
+  ResultCode: Integer;
+  PsArgs: String;
 begin
-  Result := VCRedistNeedsInstall and FileExists(ExpandConstant('{tmp}\vc_redist.x64.exe'));
+  Result := False;
+  if not FileExists(FilePath) then Exit;
+  PsArgs := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ' +
+    '"$s = Get-AuthenticodeSignature -LiteralPath ''' + FilePath + '''; ' +
+    'if ($s.Status -eq ''Valid'' -and $s.SignerCertificate.Subject -like ''*Microsoft*'') { exit 0 } else { exit 1 }"';
+  if Exec('powershell.exe', PsArgs, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Result := (ResultCode = 0);
+end;
+
+function VCRedistNeedsInstallAndFileExists: Boolean;
+var
+  VCRedistPath: String;
+begin
+  VCRedistPath := ExpandConstant('{tmp}\vc_redist.x64.exe');
+  Result := VCRedistNeedsInstall and FileExists(VCRedistPath) and VerifyMicrosoftSignature(VCRedistPath);
 end;
 
 function OnDownloadProgress(const Url, FileName: String; const Progress, ProgressMax: Int64): Boolean;
