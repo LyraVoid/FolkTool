@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/app_semantic_colors.dart';
 import '../providers/providers.dart';
 import '../generated/l10n.dart';
 
@@ -95,16 +96,29 @@ class DeviceStatusCard extends StatelessWidget {
     DeviceProvider provider,
     S l10n,
   ) {
+    final semantic = context.semantic;
     Color dotColor;
     String label;
     switch (provider.connectionState) {
       case DeviceConnectionState.adbConnected:
-        dotColor = Colors.green;
+        dotColor = semantic.success;
         label = 'ADB';
         break;
       case DeviceConnectionState.fastbootConnected:
-        dotColor = Colors.green;
+        dotColor = semantic.success;
         label = 'Fastboot';
+        break;
+      case DeviceConnectionState.adbUnauthorized:
+        dotColor = semantic.warning;
+        label = 'Unauthorized';
+        break;
+      case DeviceConnectionState.adbOffline:
+        dotColor = semantic.warning;
+        label = 'Offline';
+        break;
+      case DeviceConnectionState.multipleDevices:
+        dotColor = semantic.warning;
+        label = 'Multiple';
         break;
       case DeviceConnectionState.checking:
         dotColor = Theme.of(context).colorScheme.primary;
@@ -164,6 +178,24 @@ class DeviceStatusCard extends StatelessWidget {
         return _buildDisconnected(context);
       case DeviceConnectionState.adbConnected:
         return _buildAdbConnected(context, provider);
+      case DeviceConnectionState.adbUnauthorized:
+        final dev = provider.unauthorizedAdbDevices.first;
+        return _buildWarningItem(
+          context,
+          'USB Debugging Unauthorized (${dev.serial})',
+          'Unlock your phone screen and tap "Allow USB debugging" (check "Always allow from this computer").',
+          context.semantic.warning,
+        );
+      case DeviceConnectionState.adbOffline:
+        final dev = provider.offlineAdbDevices.first;
+        return _buildWarningItem(
+          context,
+          'ADB Device Offline (${dev.serial})',
+          'Reconnect the USB cable, try a USB 2.0/rear port, or toggle USB Debugging off and back on.',
+          context.semantic.warning,
+        );
+      case DeviceConnectionState.multipleDevices:
+        return _buildMultipleDevices(context, provider);
       case DeviceConnectionState.fastbootConnected:
         return _buildFastbootConnected(context, provider);
       case DeviceConnectionState.checking:
@@ -228,26 +260,76 @@ class DeviceStatusCard extends StatelessWidget {
     );
   }
 
+  Widget _buildMultipleDevices(BuildContext context, DeviceProvider provider) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final semantic = context.semantic;
+    final candidates = [
+      ...provider.fastbootDevices,
+      ...provider.authorizedAdbDevices,
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildWarningItem(
+          context,
+          'Multiple Devices Detected',
+          'Select one target device or disconnect extra devices before flashing.',
+          semantic.warning,
+        ),
+        if (candidates.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: candidates.map((d) {
+              final selected = provider.selectedSerial == d.serial;
+              return ChoiceChip(
+                label: Text('${d.model ?? d.serial} (${d.stateText})'),
+                selected: selected,
+                selectedColor: colorScheme.primaryContainer,
+                onSelected: (_) => provider.selectDevice(d.serial),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildAdbConnected(BuildContext context, DeviceProvider provider) {
     final l10n = S.of(context);
-    final device = provider.adbDevices.first;
+    final device = provider.selectedTargetDevice ?? provider.authorizedAdbDevices.first;
+    final details = <String>[
+      l10n.serial(device.serial),
+      if (device.model != null && device.model!.isNotEmpty) device.model!,
+      if (device.androidVersion != null && device.androidVersion!.isNotEmpty)
+        'Android ${device.androidVersion}',
+      if (device.batteryLevel != null) 'Battery ${device.batteryLevel}%',
+    ].join(' • ');
+
     return _buildStatusItem(
       context,
       l10n.adbConnected,
-      l10n.serial(device.serial),
-      Colors.green,
+      details,
+      context.semantic.success,
       Icons.android,
     );
   }
 
   Widget _buildFastbootConnected(BuildContext context, DeviceProvider provider) {
     final l10n = S.of(context);
-    final device = provider.fastbootDevices.first;
+    final device = provider.selectedTargetDevice ?? provider.fastbootDevices.first;
+    final lockText = device.bootloaderUnlocked == null
+        ? ''
+        : (device.bootloaderUnlocked!
+            ? ' • Bootloader Unlocked'
+            : ' • Bootloader Locked');
     return _buildStatusItem(
       context,
       l10n.fastbootConnected,
-      l10n.serial(device.serial),
-      Colors.green,
+      '${l10n.serial(device.serial)}$lockText',
+      context.semantic.success,
       Icons.phone_android,
     );
   }

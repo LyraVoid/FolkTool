@@ -7,6 +7,9 @@ import '../services/services.dart';
 enum DeviceConnectionState {
   disconnected,
   adbConnected,
+  adbUnauthorized,
+  adbOffline,
+  multipleDevices,
   fastbootConnected,
   checking,
 }
@@ -48,8 +51,10 @@ class DeviceProvider extends ChangeNotifier {
   DeviceConnectionState _connectionState = DeviceConnectionState.disconnected;
   List<DeviceInfo> _adbDevices = [];
   List<DeviceInfo> _fastbootDevices = [];
+  String? _selectedSerial;
   bool _isChecking = false;
   bool _isManualChecking = false;
+  bool _isOperationLocked = false;
   Timer? _monitorTimer;
   String? _errorMessage;
   bool _driverInstalled = false;
@@ -63,15 +68,61 @@ class DeviceProvider extends ChangeNotifier {
   DeviceConnectionState get connectionState => _connectionState;
   List<DeviceInfo> get adbDevices => _adbDevices;
   List<DeviceInfo> get fastbootDevices => _fastbootDevices;
+  List<DeviceInfo> get authorizedAdbDevices =>
+      _adbDevices.where((d) => d.isAuthorizedAdb).toList();
+  List<DeviceInfo> get unauthorizedAdbDevices =>
+      _adbDevices.where((d) => d.state == DeviceState.unauthorized).toList();
+  List<DeviceInfo> get offlineAdbDevices =>
+      _adbDevices.where((d) => d.state == DeviceState.offline).toList();
+  String? get selectedSerial => _selectedSerial;
   bool get isChecking => _isChecking;
   bool get isManualChecking => _isManualChecking;
+  bool get isOperationLocked => _isOperationLocked;
   String? get errorMessage => _errorMessage;
   bool get driverInstalled => _driverInstalled;
-  bool get hasAdbDevice => _adbDevices.isNotEmpty;
+  bool get hasAdbDevice => authorizedAdbDevices.isNotEmpty;
   bool get hasFastbootDevice => _fastbootDevices.isNotEmpty;
-  DeviceInfo? get currentDevice => _fastbootDevices.isNotEmpty
-      ? _fastbootDevices.first
-      : (_adbDevices.isNotEmpty ? _adbDevices.first : null);
+  bool get hasMultipleDevices {
+    if (_selectedSerial != null) {
+      final matchesSelected = _fastbootDevices.any((d) => d.serial == _selectedSerial) ||
+          authorizedAdbDevices.any((d) => d.serial == _selectedSerial);
+      if (matchesSelected) return false;
+    }
+    return _fastbootDevices.length > 1 ||
+        authorizedAdbDevices.length > 1 ||
+        (_adbDevices.length > 1 && _selectedSerial == null);
+  }
+
+  DeviceInfo? get selectedTargetDevice {
+    if (_selectedSerial != null) {
+      for (final d in _fastbootDevices) {
+        if (d.serial == _selectedSerial) return d;
+      }
+      for (final d in authorizedAdbDevices) {
+        if (d.serial == _selectedSerial) return d;
+      }
+    }
+    if (_fastbootDevices.length == 1) return _fastbootDevices.first;
+    if (authorizedAdbDevices.length == 1) return authorizedAdbDevices.first;
+    return null;
+  }
+
+  DeviceInfo? get currentDevice =>
+      selectedTargetDevice ??
+      (_fastbootDevices.isNotEmpty
+          ? _fastbootDevices.first
+          : (_adbDevices.isNotEmpty ? _adbDevices.first : null));
+
+  void selectDevice(String? serial) {
+    _selectedSerial = serial;
+    _updateConnectionState();
+    notifyListeners();
+  }
+
+  void setOperationLocked(bool locked) {
+    _isOperationLocked = locked;
+    notifyListeners();
+  }
   
   // 客户端状态 Getters
   ClientInstallStatus get apatchStatus => _apatchStatus;
@@ -89,78 +140,103 @@ class DeviceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _updateConnectionState() {
+    if (hasMultipleDevices) {
+      _connectionState = DeviceConnectionState.multipleDevices;
+    } else if (_fastbootDevices.isNotEmpty) {
+      _connectionState = DeviceConnectionState.fastbootConnected;
+    } else if (authorizedAdbDevices.isNotEmpty) {
+      _connectionState = DeviceConnectionState.adbConnected;
+    } else if (unauthorizedAdbDevices.isNotEmpty) {
+      _connectionState = DeviceConnectionState.adbUnauthorized;
+    } else if (offlineAdbDevices.isNotEmpty) {
+      _connectionState = DeviceConnectionState.adbOffline;
+    } else {
+      _connectionState = DeviceConnectionState.disconnected;
+    }
+  }
+
+  Future<void> _pollDevices() async {
+    _adbDevices = await _deviceService.getAdbDevices(
+      onLog: (line) => debugPrint('[ADB] $line'),
+    );
+
+    _fastbootDevices = await _deviceService.getFastbootDevices(
+      onLog: (line) => debugPrint('[Fastboot] $line'),
+    );
+
+    // Clear stale manual selection if that device disconnected.
+    if (_selectedSerial != null) {
+      final stillPresent = _adbDevices.any((d) => d.serial == _selectedSerial) ||
+          _fastbootDevices.any((d) => d.serial == _selectedSerial);
+      if (!stillPresent) {
+        _selectedSerial = null;
+      }
+    }
+
+    // Enrich the targeted device with OS/battery or bootloader lock state.
+    final target = selectedTargetDevice;
+    if (target != null && target.isAuthorizedAdb) {
+      final enriched = await _deviceService.queryAdbDeviceDetails(target);
+      final idx = _adbDevices.indexWhere((d) => d.serial == target.serial);
+      if (idx != -1) {
+        _adbDevices[idx] = enriched;
+      }
+    } else if (target != null && target.isFastboot) {
+      final unlocked = await _deviceService.queryBootloaderUnlocked(
+        serial: target.serial,
+      );
+      if (unlocked != null) {
+        final idx = _fastbootDevices.indexWhere((d) => d.serial == target.serial);
+        if (idx != -1) {
+          _fastbootDevices[idx] = _fastbootDevices[idx].copyWith(
+            bootloaderUnlocked: unlocked,
+          );
+        }
+      }
+    }
+
+    _updateConnectionState();
+
+    if (hasAdbDevice) {
+      await checkInstalledClients();
+    }
+  }
+
   Future<void> refreshDevices() async {
-    if (_isChecking) return;
-    
+    if (_isChecking || _isOperationLocked) return;
+
     _isChecking = true;
     _errorMessage = null;
     notifyListeners();
-    
+
     try {
-      _adbDevices = await _deviceService.getAdbDevices(
-        onLog: (line) => debugPrint('[ADB] $line'),
-      );
-      
-      _fastbootDevices = await _deviceService.getFastbootDevices(
-        onLog: (line) => debugPrint('[Fastboot] $line'),
-      );
-      
-      if (_fastbootDevices.isNotEmpty) {
-        _connectionState = DeviceConnectionState.fastbootConnected;
-      } else if (_adbDevices.isNotEmpty) {
-        _connectionState = DeviceConnectionState.adbConnected;
-      } else {
-        _connectionState = DeviceConnectionState.disconnected;
-      }
-      
-      // 如果检测到 ADB 设备连接，自动刷新客户端状态
-      if (_adbDevices.isNotEmpty) {
-        await checkInstalledClients();
-      }
+      await _pollDevices();
     } catch (e) {
       _errorMessage = e.toString();
       _connectionState = DeviceConnectionState.disconnected;
     }
-    
+
     _isChecking = false;
     notifyListeners();
   }
 
   /// 手动刷新设备状态（显示加载指示器）
   Future<void> manualRefreshDevices() async {
-    if (_isChecking || _isManualChecking) return;
-    
+    if (_isChecking || _isManualChecking || _isOperationLocked) return;
+
     _isChecking = true;
     _isManualChecking = true;
     _errorMessage = null;
     notifyListeners();
-    
+
     try {
-      _adbDevices = await _deviceService.getAdbDevices(
-        onLog: (line) => debugPrint('[ADB] $line'),
-      );
-      
-      _fastbootDevices = await _deviceService.getFastbootDevices(
-        onLog: (line) => debugPrint('[Fastboot] $line'),
-      );
-      
-      if (_fastbootDevices.isNotEmpty) {
-        _connectionState = DeviceConnectionState.fastbootConnected;
-      } else if (_adbDevices.isNotEmpty) {
-        _connectionState = DeviceConnectionState.adbConnected;
-      } else {
-        _connectionState = DeviceConnectionState.disconnected;
-      }
-      
-      // 如果检测到 ADB 设备连接，自动刷新客户端状态
-      if (_adbDevices.isNotEmpty) {
-        await checkInstalledClients();
-      }
+      await _pollDevices();
     } catch (e) {
       _errorMessage = e.toString();
       _connectionState = DeviceConnectionState.disconnected;
     }
-    
+
     _isChecking = false;
     _isManualChecking = false;
     notifyListeners();
@@ -179,16 +255,18 @@ class DeviceProvider extends ChangeNotifier {
 
   Future<bool> rebootToFastboot() async {
     if (!hasAdbDevice) return false;
-    
+    final serial = selectedTargetDevice?.serial;
+
     final success = await _deviceService.rebootToFastboot(
+      serial: serial,
       onLog: (line) => debugPrint('[Reboot] $line'),
     );
-    
+
     if (success) {
       await Future.delayed(const Duration(seconds: 2));
       await waitForFastboot();
     }
-    
+
     return success;
   }
 
@@ -197,9 +275,10 @@ class DeviceProvider extends ChangeNotifier {
       timeout: timeout,
       onLog: (line) => debugPrint('[WaitFastboot] $line'),
     );
-    
+
     if (device != null) {
       _fastbootDevices = [device];
+      _selectedSerial = device.serial;
       _connectionState = DeviceConnectionState.fastbootConnected;
       notifyListeners();
       return true;
@@ -209,26 +288,29 @@ class DeviceProvider extends ChangeNotifier {
 
   Future<bool> flashBoot(String imagePath, {void Function(String)? onLog}) async {
     if (!hasFastbootDevice) return false;
-    
+
     return await _deviceService.flashBoot(
       imagePath,
+      serial: selectedTargetDevice?.serial,
       onLog: onLog ?? (line) => debugPrint('[Flash] $line'),
     );
   }
 
   Future<bool> backupBoot(String outputPath, {void Function(String)? onLog}) async {
     if (!hasFastbootDevice) return false;
-    
+
     return await _deviceService.backupBoot(
       outputPath,
+      serial: selectedTargetDevice?.serial,
       onLog: onLog ?? (line) => debugPrint('[Backup] $line'),
     );
   }
 
   Future<bool> rebootDevice({void Function(String)? onLog}) async {
     if (!hasFastbootDevice) return false;
-    
+
     return await _deviceService.rebootDevice(
+      serial: selectedTargetDevice?.serial,
       onLog: onLog ?? (line) => debugPrint('[Reboot] $line'),
     );
   }
@@ -304,16 +386,17 @@ class DeviceProvider extends ChangeNotifier {
     }
     notifyListeners();
     
+    final serial = selectedTargetDevice?.serial;
     bool success;
     if (type == ClientType.apatch) {
-      success = await _deviceService.installAPatch(onLog: onLog);
+      success = await _deviceService.installAPatch(serial: serial, onLog: onLog);
       _apatchStatus = ClientInstallStatus(
         type: ClientType.apatch,
         installed: success,
         installing: false,
       );
     } else {
-      success = await _deviceService.installFolkPatch(onLog: onLog);
+      success = await _deviceService.installFolkPatch(serial: serial, onLog: onLog);
       _folkpatchStatus = ClientInstallStatus(
         type: ClientType.folkpatch,
         installed: success,
