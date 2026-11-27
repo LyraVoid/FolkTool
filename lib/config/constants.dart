@@ -13,36 +13,51 @@ class Constants {
   
   static String get _exeDir => File(Platform.resolvedExecutable).parent.path;
   
+  static bool? _cachedIsReleaseMode;
+  static String? _cachedProjectRoot;
+  static String? _cachedKpVersionsBasePath;
+
+  /// Clears memoized filesystem root resolutions (primarily for tests).
+  @visibleForTesting
+  static void resetPathCache() {
+    _cachedIsReleaseMode = null;
+    _cachedProjectRoot = null;
+    _cachedKpVersionsBasePath = null;
+  }
+
   static bool get _isReleaseMode {
+    final cached = _cachedIsReleaseMode;
+    if (cached != null) return cached;
+
     final exeFile = File(Platform.resolvedExecutable);
     final exePath = exeFile.parent.path.toLowerCase();
 
-    if (exePath.contains(r'\debug') || exePath.contains('/debug')) {
-      return false;
+    var isRelease = false;
+    if (!exePath.contains(r'\debug') &&
+        !exePath.contains('/debug') &&
+        !exePath.contains(r'\build\') &&
+        !exePath.contains('/build/')) {
+      final binDir = Directory(p.join(exeFile.parent.path, 'bin'));
+      final kpVersionsDir =
+          Directory(p.join(exeFile.parent.path, 'kp_versions'));
+      isRelease = binDir.existsSync() && kpVersionsDir.existsSync();
     }
 
-    if (exePath.contains(r'\build\') || exePath.contains('/build/')) {
-      return false;
-    }
-
-    final binDir = Directory(p.join(exeFile.parent.path, 'bin'));
-    final kpVersionsDir = Directory(p.join(exeFile.parent.path, 'kp_versions'));
-    
-    if (binDir.existsSync() && kpVersionsDir.existsSync()) {
-      return true;
-    }
-
-    return false;
+    _cachedIsReleaseMode = isRelease;
+    return isRelease;
   }
-  
+
   static String get _assetsRoot {
     if (_isReleaseMode) {
       return File(Platform.resolvedExecutable).parent.path;
     }
     return _projectRoot;
   }
-  
-  static String get _projectRoot {
+
+  static String get _projectRoot =>
+      _cachedProjectRoot ??= _resolveProjectRoot();
+
+  static String _resolveProjectRoot() {
     // 辅助函数：通过 pubspec.yaml 查找项目根目录
     String? findProjectRootByPubspec() {
       var dir = Directory.current;
@@ -136,7 +151,10 @@ static const String folkpatchPackageName = 'me.yuki.folk';
   
   static String get recentFilesKey => 'recent_files';
   
-  static String get kpVersionsBasePath {
+  static String get kpVersionsBasePath =>
+      _cachedKpVersionsBasePath ??= _resolveKpVersionsBasePath();
+
+  static String _resolveKpVersionsBasePath() {
     if (_isReleaseMode) {
       debugPrint('[Constants] Release mode, using assets path: ${p.join(_assetsRoot, 'kp_versions')}');
       return p.join(_assetsRoot, 'kp_versions');

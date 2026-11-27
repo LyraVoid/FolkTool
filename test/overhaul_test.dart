@@ -2,8 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:FolkTool/config/app_theme.dart';
+import 'package:FolkTool/config/constants.dart';
 import 'package:FolkTool/generated/l10n.dart';
 import 'package:FolkTool/models/models.dart';
 import 'package:FolkTool/providers/providers.dart';
@@ -140,8 +142,7 @@ void main() {
       expect(settings.confirmBeforeFlash, isTrue);
     });
 
-    testWidgets('ErrorBanner hides Retry when canSafelyRetry is false',
-        (tester) async {
+    testWidgets('ErrorBanner hides retry CTA when unsafe', (tester) async {
       final unsafeError = AppError(
         category: AppErrorCategory.flashing,
         title: 'Flash Interrupted',
@@ -190,6 +191,59 @@ void main() {
 
       expect(find.textContaining('Checking ADB server'), findsNothing);
       expect(find.textContaining('Boot image magic missing'), findsOneWidget);
+    });
+
+    test('PatchProvider enforces bounded log history up to maxLogEntries', () {
+      final provider = PatchProvider();
+      final total = PatchProvider.maxLogEntries + 45;
+      for (var i = 0; i < total; i++) {
+        provider.addLogEntryForTest(LogLevel.info, 'entry_$i');
+      }
+
+      expect(provider.logs.length, PatchProvider.maxLogEntries);
+      expect(provider.logs.first.message, 'entry_45');
+      expect(provider.logs.last.message, 'entry_${total - 1}');
+    });
+
+    test('Constants caches resolved asset paths consistently', () {
+      Constants.resetPathCache();
+      final firstKp = Constants.kpVersionsBasePath;
+      final secondKp = Constants.kpVersionsBasePath;
+      expect(firstKp, equals(secondKp));
+      expect(Constants.adbPath.isNotEmpty, isTrue);
+    });
+
+    testWidgets(
+        'BootImageSelectorCard and KpmModulesSelectorCard reflect PatchProvider state',
+        (tester) async {
+      final provider = PatchProvider()
+        ..setSelectedFile(r'C:\images\boot.img')
+        ..setKpmModules({r'C:\modules\demo.kpm'});
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<PatchProvider>.value(
+          value: provider,
+          child: _wrapWidget(
+            const SingleChildScrollView(
+              child: Column(
+                children: [
+                  BootImageSelectorCard(),
+                  KpmModulesSelectorCard(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(r'C:\images\boot.img'), findsOneWidget);
+      expect(find.text('demo.kpm'), findsOneWidget);
+      expect(find.text('1'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(provider.selectedKpmModules, isEmpty);
     });
   });
 }

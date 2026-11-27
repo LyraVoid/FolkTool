@@ -38,7 +38,11 @@ class PatchProvider extends ChangeNotifier {
   int get currentStepIndex => _currentStepIndex;
   PatchOperationState get operationState => _operationState;
   FlashingPhase get phase => _phase;
-  List<LogEntry> get logs => _logs;
+
+  /// Maximum number of log entries kept in memory per session to keep UI scrolling responsive.
+  static const int maxLogEntries = 2000;
+
+  List<LogEntry> get logs => List.unmodifiable(_logs);
   String? get errorMessage => _errorMessage;
   AppError? get lastError => _lastError;
   String get operationId => _operationId;
@@ -92,6 +96,12 @@ class PatchProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Exposes internal log insertion for deterministic unit testing of buffer caps.
+  @visibleForTesting
+  void addLogEntryForTest(LogLevel level, String message) {
+    _addLog(level, message);
+  }
+
   void _addLog(
     LogLevel level,
     String message, {
@@ -108,6 +118,9 @@ class PatchProvider extends ChangeNotifier {
       category: category,
       technicalDetails: technicalDetails,
     );
+    if (_logs.length >= maxLogEntries) {
+      _logs.removeRange(0, _logs.length - maxLogEntries + 1);
+    }
     _logs.add(entry);
     debugPrint(entry.toFormattedString());
     notifyListeners();

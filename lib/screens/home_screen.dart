@@ -100,34 +100,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _navigateToQuickPatch() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const QuickPatchScreen()),
-    );
-  }
-
-  void _navigateToStepPatch() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const StepPatchScreen()),
-    );
-  }
-
-  void _navigateToSimplePatch() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const SimplePatchScreen()),
-    );
-  }
-
-  void _navigateToDriverInstall() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const DriverInstallScreen()),
-    );
-  }
-
   IconData _themeIcon(ThemeMode mode) {
     switch (mode) {
       case ThemeMode.light:
@@ -493,7 +465,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   subtitle: l10n.quickPatchSubtitle,
                   icon: Icons.flash_on,
                   color: Colors.blue,
-                  onTap: _navigateToQuickPatch,
+                  onTap: () => _selectNav(1),
                 ),
               ),
               const SizedBox(width: 14),
@@ -504,7 +476,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   subtitle: l10n.stepPatchSubtitle,
                   icon: Icons.list_alt,
                   color: Colors.green,
-                  onTap: _navigateToStepPatch,
+                  onTap: () => _selectNav(2),
                 ),
               ),
             ],
@@ -522,7 +494,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   subtitle: l10n.simplePatchSubtitle,
                   icon: Icons.build_circle,
                   color: Colors.orange,
-                  onTap: _navigateToSimplePatch,
+                  onTap: () => _selectNav(3),
                 ),
               ),
               const SizedBox(width: 14),
@@ -533,7 +505,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   subtitle: l10n.driverInstallSubtitle,
                   icon: Icons.usb,
                   color: Colors.purple,
-                  onTap: _navigateToDriverInstall,
+                  onTap: () => _selectNav(4),
                 ),
               ),
             ],
@@ -703,7 +675,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? () {
                     final patchProvider = context.read<PatchProvider>();
                     patchProvider.setSelectedFile(entry.path);
-                    _navigateToQuickPatch();
+                    _selectNav(1);
                   }
                 : () {
                     ScaffoldMessenger.of(context).showSnackBar(
