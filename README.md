@@ -36,11 +36,11 @@
 ### 核心特性
 
 - **多模式刷入：** 支持[一键刷入](#-操作模式对比)、[分步操作](#-操作模式对比)及[仅修补（简单修补）](#-操作模式对比)。
-- **刷入前安全检查：** 在执行修补与刷入前自动校验 `boot.img` 完整性、内核版本兼容范围（`3.18 – 6.15`）、设备电量及内置工具链（详见 [SafetyService](lib/services/safety_service.dart)）。
-- **自动备份与恢复：** 修补前自动备份原始 `boot` 分区镜像，失败时支持一键恢复原厂 `boot`（详见 [PatchProvider](lib/providers/patch_provider.dart)）。
-- **设备与客户端检测：** 自动识别 ADB / Fastboot 连接状态及客户端安装情况（[DeviceService](lib/services/device_service.dart)）。
+- **刷入前安全检查：** 在执行修补与刷入前自动校验 `boot.img` 完整性、内核版本兼容范围（`3.18 – 6.15`）、设备电量及内置工具链（详见 [SafetyService](lib/features/patching/services/safety_service.dart)）。
+- **自动备份与恢复：** 修补前自动备份原始 `boot` 分区镜像，失败时支持一键恢复原厂 `boot`（详见 [PatchProvider](lib/features/patching/providers/patch_provider.dart)）。
+- **设备与客户端检测：** 自动识别 ADB / Fastboot 连接状态及客户端安装情况（[DeviceService](lib/features/device/services/device_service.dart)）。
 - **一键诊断导出：** 日志控制台支持一键复制、清空及导出完整诊断报告（包含系统环境、设备信息与运行日志）。
-- **内置驱动安装：** 集成高通、联发科、一加、OPPO 等常见设备 USB / Fastboot 驱动（[DriverService](lib/services/driver_service.dart)）。
+- **内置驱动安装：** 集成高通、联发科、一加、OPPO 等常见设备 USB / Fastboot 驱动（[DriverService](lib/features/drivers/services/driver_service.dart)）。
 
 ---
 
@@ -155,7 +155,7 @@ FolkTool 遵循 [GNU General Public License v3 (GPL-3)](LICENSE) 协议开源：
 <summary><strong>📝 更新日志</strong></summary>
 
 ### v1.7.0 (2026-11-25)
-- **安装器与运行库修复：** 安装脚本 ([installer.iss](installer.iss) / [install.iss](install.iss)) 自动检测并安装 VC++ 2015–2022 (x64) 运行库，解决缺失 `MSVCP140.dll` / `VCRUNTIME140_1.dll` 报错。
+- **安装器与运行库修复：** 安装脚本 ([installer.iss](installer.iss)) 自动检测并安装 VC++ 2015–2022 (x64) 运行库，解决缺失 `MSVCP140.dll` / `VCRUNTIME140_1.dll` 报错。
 - **窗口与任务栏适配：** 修复高 DPI / 小屏下窗口被 Windows 任务栏遮挡的问题，支持自由缩放与最大化（[win32_window.cpp](windows/runner/win32_window.cpp)）。
 - **UI/UX 升级：** 采用原生 Material 3 设计，支持浅色 / 深色 / 跟随系统主题、响应式居中布局与日志复制/导出。
 - **安全与诊断：** 新增刷入前安全检查、自动备份与恢复原厂 `boot`、导出诊断报告及应用内版本更新提示。

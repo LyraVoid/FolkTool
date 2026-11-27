@@ -23,7 +23,7 @@
   #define DefaultInstallDir "{autopf}\FolkTool"
 #endif
 #ifndef CompressionAlgo
-  #define CompressionAlgo "lzma"
+  #define CompressionAlgo "lzma2"
 #endif
 
 [Setup]
@@ -68,6 +68,7 @@ Source: "{#SourceDir}\flutter_windows.dll"; DestDir: "{app}"; Flags: ignoreversi
 Source: "{#SourceDir}\url_launcher_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "bin\*"; DestDir: "{app}\bin"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "apk\*"; DestDir: "{app}\apk"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "assets\icons"
 Source: "kp_versions\*"; DestDir: "{app}\kp_versions"; Flags: ignoreversion recursesubdirs createallsubdirs
 
@@ -81,9 +82,6 @@ Source: "redist\vcruntime140_1.dll"; DestDir: "{app}"; Flags: ignoreversion skip
 
 ; Optional bundled Visual C++ Redistributable installer
 Source: "redist\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: ignoreversion skipifsourcedoesntexist
-
-[Dirs]
-Name: "{app}\installer"; Flags: deleteafterinstall
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

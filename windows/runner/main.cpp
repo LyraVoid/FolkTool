@@ -26,7 +26,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(540, 760);
+  Win32Window::Size size(1040, 760);
   if (!window.Create(L"FolkTool", origin, size)) {
     return EXIT_FAILURE;
   }

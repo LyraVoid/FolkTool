@@ -12,7 +12,7 @@ Thank you for contributing to **[FolkTool](https://github.com/LyraVoid/FolkTool)
 - **OS:** Windows 10 / 11 (x64)
 - **SDK:** [Flutter SDK (stable)](https://docs.flutter.dev/get-started/install/windows) with Windows desktop support enabled
 - **Toolchain:** [Visual Studio 2022](https://visualstudio.microsoft.com/) with **Desktop development with C++**
-- **Installer (optional):** [Inno Setup 6](https://jrsoftware.org/isinfo.php) for compiling [installer.iss](installer.iss) / [install.iss](install.iss)
+- **Installer (optional):** [Inno Setup 6](https://jrsoftware.org/isinfo.php) for compiling [installer.iss](installer.iss)
 
 ---
 
@@ -31,13 +31,16 @@ flutter run -d windows
 
 ## Project Architecture
 
+See [Architecture & Asset Ownership](docs/ARCHITECTURE_AND_ASSETS.md) for module boundaries and binary asset SHA-256 verification.
+
 | Layer | Directory / File | Purpose |
 | :--- | :--- | :--- |
-| **Theme & Config** | [app_theme.dart](lib/config/app_theme.dart), [app_semantic_colors.dart](lib/config/app_semantic_colors.dart), [constants.dart](lib/config/constants.dart) | Material 3 Light/Dark themes, semantic tokens, paths & repo metadata |
-| **State Providers** | [providers.dart](lib/providers/providers.dart) | `DeviceProvider`, `PatchProvider`, `VersionProvider`, `ThemeProvider`, `LocaleProvider` |
-| **Core Services** | [services.dart](lib/services/services.dart) | `DeviceService`, `KpToolsService`, `FileService`, `SafetyService`, `UpdateService`, `DriverService` |
-| **UI Screens & Widgets** | [screens.dart](lib/screens/screens.dart), [widgets.dart](lib/widgets/widgets.dart) | Home, Quick/Simple/Step Patch, Driver Install, Log Console, Status Cards |
-| **Win32 Runner** | [main.cpp](windows/runner/main.cpp), [win32_window.cpp](windows/runner/win32_window.cpp) | Work-area clamped DPI-aware window creation & `WM_GETMINMAXINFO` |
+| **App Shell** | [folk_tool_app.dart](lib/app/folk_tool_app.dart), [app_shell_screen.dart](lib/app/app_shell_screen.dart) | MultiProvider root & responsive `NavigationRail` / `NavigationBar` desktop shell |
+| **Core Foundations** | [app_config.dart](lib/core/config/app_config.dart), [app_theme.dart](lib/core/config/app_theme.dart), [process_runner.dart](lib/core/process/process_runner.dart), [log_console.dart](lib/core/widgets/log_console.dart) | Memoized asset/tool paths, Material 3 themes, timeout-safe process execution, error banners & log console |
+| **Device Feature** | [device_service.dart](lib/features/device/services/device_service.dart), [device_provider.dart](lib/features/device/providers/device_provider.dart), [device_status_card.dart](lib/features/device/widgets/device_status_card.dart) | Concurrent ADB/Fastboot monitoring, static property caching, single-call package lookup |
+| **Patching Feature** | [patch_provider.dart](lib/features/patching/providers/patch_provider.dart), [kptools_service.dart](lib/features/patching/services/kptools_service.dart), [safety_service.dart](lib/features/patching/services/safety_service.dart) | Pre-flight safety checks, boot backup/restore, state machine, KPM module selection |
+| **Drivers, Files & Settings** | [driver_service.dart](lib/features/drivers/services/driver_service.dart), [file_service.dart](lib/features/files/services/file_service.dart), [settings_screen.dart](lib/features/settings/screens/settings_screen.dart) | Authenticode-verified driver installers, recent files & log export, preferences |
+| **Win32 Runner** | [main.cpp](windows/runner/main.cpp), [win32_window.cpp](windows/runner/win32_window.cpp), [Runner.rc](windows/runner/Runner.rc) | Work-area clamped DPI-aware window creation, desktop sizing & canonical icon embedding |
 | **Localization** | [intl_en.arb](lib/l10n/intl_en.arb), [intl_zh.arb](lib/l10n/intl_zh.arb) | English & Chinese ARB strings + generated `lib/generated/` |
 
 ---

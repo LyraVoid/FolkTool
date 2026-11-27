@@ -73,10 +73,9 @@ jobs:
       - name: Build Windows Release
         shell: pwsh
         run: |
-          Copy-Item -Force "assets\icons\icon.ico" "windows\runner\resources\app_icon.ico"
           flutter build windows --release --dart-define=APP_VERSION=${{ env.APP_VERSION }}
 
-      - name: Verify PE architecture & CRT dependencies
+      - name: Verify PE architecture, icon resources & CRT dependencies
         shell: pwsh
         run: |
           $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -84,17 +83,18 @@ jobs:
           $dumpbin = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Filter "dumpbin.exe" -Recurse | Where-Object { $_.FullName -match "Hostx64\\x64" } | Select-Object -First 1 -ExpandProperty FullName
           if (-not $dumpbin) {
             Write-Warning "dumpbin.exe not found; skipping PE inspection"
-            exit 0
+          } else {
+            $exe = "build\windows\x64\runner\Release\FolkTool.exe"
+            $headers = & $dumpbin /headers $exe | Out-String
+            if ($headers -notmatch "x64") {
+              throw "FolkTool.exe is not an x64 binary!"
+            }
+            Write-Host "=== FolkTool.exe Dependencies ==="
+            & $dumpbin /dependents $exe
+            Write-Host "=== flutter_windows.dll Dependencies ==="
+            & $dumpbin /dependents "build\windows\x64\runner\Release\flutter_windows.dll"
           }
-          $exe = "build\windows\x64\runner\Release\FolkTool.exe"
-          $headers = & $dumpbin /headers $exe | Out-String
-          if ($headers -notmatch "x64") {
-            throw "FolkTool.exe is not an x64 binary!"
-          }
-          Write-Host "=== FolkTool.exe Dependencies ==="
-          & $dumpbin /dependents $exe
-          Write-Host "=== flutter_windows.dll Dependencies ==="
-          & $dumpbin /dependents "build\windows\x64\runner\Release\flutter_windows.dll"
+          & pwsh -NoProfile -File "scripts\verify_pe_icon.ps1" -BinaryPath "build\windows\x64\runner\Release\FolkTool.exe"
 
       - name: Verify VC++ Redistributable download URL
         shell: pwsh
@@ -156,7 +156,7 @@ jobs:
           }
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Compile installer.iss
+      - name: Compile installer.iss & verify installer icon
         shell: pwsh
         env:
           CERT_B64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
@@ -167,6 +167,8 @@ jobs:
           if (-not (Test-Path "installer\FolkTool-Setup.exe")) {
             throw "Expected output installer\FolkTool-Setup.exe not found"
           }
+          & pwsh -NoProfile -File "scripts\verify_pe_icon.ps1" -BinaryPath "installer\FolkTool-Setup.exe"
+
           if (-not [string]::IsNullOrWhiteSpace($env:CERT_B64)) {
             $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
               Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
@@ -180,17 +182,6 @@ jobs:
             } finally {
               Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
             }
-          }
-
-      - name: Stage release folder and compile install.iss
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path "release\FolkTool-Windows-Release" | Out-Null
-          Copy-Item -Recurse -Force "build\windows\x64\runner\Release\*" "release\FolkTool-Windows-Release\"
-          & "$env:ISCC" "/DMyAppVersion=$env:APP_VERSION" install.iss
-          if ($LASTEXITCODE -ne 0) { throw "install.iss compilation failed" }
-          if (-not (Test-Path "release\FolkTool-Setup-v$env:APP_VERSION.exe")) {
-            throw "Expected output release\FolkTool-Setup-v$env:APP_VERSION.exe not found"
           }
 
       - name: Smoke test silent install, window bounds, and uninstall
@@ -220,6 +211,8 @@ jobs:
             (Join-Path $installDir "bin\adb.exe"),
             (Join-Path $installDir "bin\fastboot.exe"),
             (Join-Path $installDir "bin\msys-2.0.dll"),
+            (Join-Path $installDir "apk\APatch.apk"),
+            (Join-Path $installDir "apk\FolkPatch.apk"),
             (Join-Path $installDir "assets\kpimg"),
             (Join-Path $installDir "kp_versions\folkpatch\kpimg"),
             (Join-Path $installDir "kp_versions\apatch\kpimg")
@@ -295,6 +288,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path "artifacts\portable" | Out-Null
           Copy-Item -Recurse -Force "build\windows\x64\runner\Release\*" "artifacts\portable\"
           Copy-Item -Recurse -Force "bin" "artifacts\portable\bin"
+          Copy-Item -Recurse -Force "apk" "artifacts\portable\apk"
           Copy-Item -Recurse -Force "assets" "artifacts\portable\assets"
           Copy-Item -Recurse -Force "kp_versions" "artifacts\portable\kp_versions"
           @"
@@ -339,7 +333,7 @@ jobs:
           - **Static Analysis (`flutter analyze`)**: Passed
           - **Widget Tests (`flutter test`)**: Passed
           - **Windows Release Build & PE x64 Audit (`dumpbin`)**: Passed
-          - **Inno Setup Scripts**: `installer.iss` and `install.iss` both compiled cleanly
+          - **Inno Setup Script**: `installer.iss` compiled cleanly (with `assets\icons\icon.ico` verified in both EXEs)
           - **Silent Install -> Window Bounds / Taskbar Check -> Clean Uninstall**: Passed
           - **Artifacts**:
             - `FolkTool-Setup.exe` ($setupSizeMB MB) — SHA-256: ``$setupHash``

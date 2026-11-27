@@ -4,13 +4,20 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:FolkTool/config/app_theme.dart';
-import 'package:FolkTool/config/constants.dart';
+import 'package:FolkTool/core/config/app_config.dart';
+import 'package:FolkTool/core/config/app_theme.dart';
+import 'package:FolkTool/core/errors/app_error.dart';
+import 'package:FolkTool/core/logging/log_entry.dart';
+import 'package:FolkTool/core/widgets/error_banner.dart';
+import 'package:FolkTool/core/widgets/log_console.dart';
+import 'package:FolkTool/features/device/models/device_info.dart';
+import 'package:FolkTool/features/device/services/device_service.dart';
+import 'package:FolkTool/features/files/services/file_service.dart';
+import 'package:FolkTool/features/patching/providers/patch_provider.dart';
+import 'package:FolkTool/features/patching/services/safety_service.dart';
+import 'package:FolkTool/features/patching/widgets/patch_inputs.dart';
+import 'package:FolkTool/features/settings/providers/settings_provider.dart';
 import 'package:FolkTool/generated/l10n.dart';
-import 'package:FolkTool/models/models.dart';
-import 'package:FolkTool/providers/providers.dart';
-import 'package:FolkTool/services/services.dart';
-import 'package:FolkTool/widgets/widgets.dart';
 
 Widget _wrapWidget(Widget child) {
   return MaterialApp(
@@ -125,7 +132,17 @@ void main() {
     });
   });
 
-  group('SettingsProvider & UI widgets', () {
+  group('SettingsProvider, logging & UI widgets', () {
+    test('generateOperationId returns RFC 4122 v4 UUID string', () {
+      final id = generateOperationId();
+      expect(
+        RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        ).hasMatch(id),
+        isTrue,
+      );
+    });
+
     test('SettingsProvider updates and resets to defaults', () async {
       SharedPreferences.setMockInitialValues({});
       final settings = SettingsProvider();
@@ -206,12 +223,12 @@ void main() {
       expect(provider.logs.last.message, 'entry_${total - 1}');
     });
 
-    test('Constants caches resolved asset paths consistently', () {
-      Constants.resetPathCache();
-      final firstKp = Constants.kpVersionsBasePath;
-      final secondKp = Constants.kpVersionsBasePath;
+    test('AppConfig caches resolved asset paths consistently', () {
+      AppConfig.resetPathCache();
+      final firstKp = AppConfig.kpVersionsBasePath;
+      final secondKp = AppConfig.kpVersionsBasePath;
       expect(firstKp, equals(secondKp));
-      expect(Constants.adbPath.isNotEmpty, isTrue);
+      expect(AppConfig.adbPath.isNotEmpty, isTrue);
     });
 
     testWidgets(

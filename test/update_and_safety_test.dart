@@ -2,12 +2,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:FolkTool/core/logging/log_entry.dart';
+import 'package:FolkTool/core/updates/update_service.dart';
+import 'package:FolkTool/core/widgets/log_console.dart';
+import 'package:FolkTool/features/device/models/device_info.dart';
+import 'package:FolkTool/features/device/services/device_service.dart';
+import 'package:FolkTool/features/files/services/file_service.dart';
+import 'package:FolkTool/features/patching/services/safety_service.dart';
 import 'package:FolkTool/generated/l10n.dart';
-import 'package:FolkTool/models/models.dart';
-import 'package:FolkTool/services/file_service.dart';
-import 'package:FolkTool/services/safety_service.dart';
-import 'package:FolkTool/services/update_service.dart';
-import 'package:FolkTool/widgets/log_console.dart';
 
 void main() {
   group('UpdateService version helpers', () {
@@ -27,7 +29,7 @@ void main() {
     });
   });
 
-  group('SafetyService', () {
+  group('SafetyService & battery parsing', () {
     test('isKernelCompatible enforces 3.18 to 6.15 range', () {
       expect(SafetyService.isKernelCompatible('3.17.99'), isFalse);
       expect(SafetyService.isKernelCompatible('3.18.140'), isTrue);
@@ -38,9 +40,10 @@ void main() {
       expect(SafetyService.isKernelCompatible(null), isFalse);
     });
 
-    test('parseBatteryLevel extracts level from dumpsys output', () {
-      expect(SafetyService.parseBatteryLevel('  level: 42\n'), 42);
-      expect(SafetyService.parseBatteryLevel('no level here'), isNull);
+    test('DeviceService.parseBatteryLevel extracts level from dumpsys output',
+        () {
+      expect(DeviceService.parseBatteryLevel('  level: 42\n'), 42);
+      expect(DeviceService.parseBatteryLevel('no level here'), isNull);
     });
 
     test('runPreflightChecks reports errors for missing or empty boot.img',

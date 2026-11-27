@@ -36,11 +36,11 @@
 ### Core Features
 
 - **Flexible Flashing Modes:** Choose between [One-Click Flash](#-operation-modes), [Step-by-Step](#-operation-modes), or [Simple Patch](#-operation-modes).
-- **Pre-Flight Safety Checks:** Validates `boot.img` integrity, kernel version compatibility (`3.18 – 6.15`), device battery level, and bundled binaries before flashing ([SafetyService](lib/services/safety_service.dart)).
-- **Automatic Stock Backup & Restore:** Backs up the original `boot` partition prior to patching and supports one-click stock restore on failure ([PatchProvider](lib/providers/patch_provider.dart)).
-- **Device & Client Detection:** Real-time ADB / Fastboot status monitoring and APatch / FolkPatch client detection ([DeviceService](lib/services/device_service.dart)).
-- **Diagnostic Log Console:** Monospace selectable log viewer with **Copy All**, **Clear**, and **Export Diagnostic Report** actions ([LogConsole](lib/widgets/log_console.dart)).
-- **Built-in Driver Installers:** One-click launch for Qualcomm, MediaTek, OnePlus, and OPPO USB/Fastboot drivers ([DriverService](lib/services/driver_service.dart)).
+- **Pre-Flight Safety Checks:** Validates `boot.img` integrity, kernel version compatibility (`3.18 – 6.15`), device battery level, and bundled binaries before flashing ([SafetyService](lib/features/patching/services/safety_service.dart)).
+- **Automatic Stock Backup & Restore:** Backs up the original `boot` partition prior to patching and supports one-click stock restore on failure ([PatchProvider](lib/features/patching/providers/patch_provider.dart)).
+- **Device & Client Detection:** Real-time ADB / Fastboot status monitoring and APatch / FolkPatch client detection ([DeviceService](lib/features/device/services/device_service.dart)).
+- **Diagnostic Log Console:** Monospace selectable log viewer with **Copy All**, **Clear**, and **Export Diagnostic Report** actions ([LogConsole](lib/core/widgets/log_console.dart)).
+- **Built-in Driver Installers:** One-click launch for Qualcomm, MediaTek, OnePlus, and OPPO USB/Fastboot drivers ([DriverService](lib/features/drivers/services/driver_service.dart)).
 
 ---
 
@@ -155,7 +155,7 @@ FolkTool is licensed under the [GNU General Public License v3 (GPL-3)](LICENSE):
 <summary><strong>📝 Changelog</strong></summary>
 
 ### v1.7.0 (2026-11-25)
-- **Installer Runtime Fix:** Updated [installer.iss](installer.iss) and [install.iss](install.iss) to detect and install VC++ 2015–2022 (x64) automatically, resolving missing `MSVCP140.dll` / `VCRUNTIME140_1.dll` errors.
+- **Installer Runtime Fix:** Updated [installer.iss](installer.iss) to detect and install VC++ 2015–2022 (x64) automatically, resolving missing `MSVCP140.dll` / `VCRUNTIME140_1.dll` errors.
 - **Window & Taskbar Fix:** Clamped initial and minimum window bounds to `MONITORINFO.rcWork` and enabled `WS_OVERLAPPEDWINDOW` resizing/maximizing ([win32_window.cpp](windows/runner/win32_window.cpp)).
 - **Material 3 UI/UX:** Added Light / Dark / System themes, responsive desktop layout, native `SegmentedButton`, and enhanced Log Console actions.
 - **Safety & Diagnostics:** Added pre-flight checks, stock `boot.img` backup/restore, diagnostic report export, and non-blocking GitHub Release update checks.

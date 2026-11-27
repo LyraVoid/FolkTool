@@ -9,7 +9,7 @@ FolkTool targets **Windows 10/11 x64** while supporting active development on **
   2. Run `flutter pub get`, `flutter analyze --no-fatal-infos`, and `flutter test --reporter expanded`.
   3. Do not attempt `flutter build windows` on Linux; Windows desktop compilation requires MSVC + Windows 10/11 SDK.
 - **Build automatically via GitHub Actions** (`.github/workflows/windows-ci.yml`):
-  - Runs on `windows-latest` (`x64`), executes `flutter analyze`, `flutter test`, `flutter build windows --release`, PE x64 dependency inspection (`dumpbin`), compiles `installer.iss` & `install.iss`, runs a silent install/window-bounds/uninstall smoke test, and uploads `FolkTool-Setup-Windows` (`FolkTool-Setup.exe`) and `FolkTool-Windows-Portable` (`FolkTool-Windows-Portable.zip`).
+  - Runs on `windows-latest` (`x64`), executes `flutter analyze`, `flutter test`, `flutter build windows --release`, PE x64 dependency & `RT_ICON` hash verification ([verify_pe_icon.ps1](../scripts/verify_pe_icon.ps1)), compiles `installer.iss`, runs a silent install/window-bounds/uninstall smoke test, and uploads `FolkTool-Setup-Windows` (`FolkTool-Setup.exe`) and `FolkTool-Windows-Portable` (`FolkTool-Windows-Portable.zip`).
 - **Build locally on bootable Windows**:
   1. Install Flutter (`stable`), Visual Studio 2022 ("Desktop development with C++"), and Inno Setup 6.
   2. Run:

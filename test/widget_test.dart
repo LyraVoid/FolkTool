@@ -3,12 +3,18 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:FolkTool/config/app_theme.dart';
+import 'package:FolkTool/core/config/app_theme.dart';
+import 'package:FolkTool/core/logging/log_entry.dart';
+import 'package:FolkTool/core/widgets/log_console.dart';
+import 'package:FolkTool/features/patching/models/operation_step.dart';
+import 'package:FolkTool/features/patching/models/patch_target.dart';
+import 'package:FolkTool/features/patching/providers/version_provider.dart';
+import 'package:FolkTool/features/patching/widgets/patch_target_selector.dart';
+import 'package:FolkTool/features/patching/widgets/step_progress.dart';
+import 'package:FolkTool/features/patching/widgets/version_selector.dart';
+import 'package:FolkTool/features/settings/providers/locale_provider.dart';
+import 'package:FolkTool/features/settings/providers/theme_provider.dart';
 import 'package:FolkTool/generated/l10n.dart';
-import 'package:FolkTool/models/models.dart';
-import 'package:FolkTool/models/patch_target.dart';
-import 'package:FolkTool/providers/providers.dart';
-import 'package:FolkTool/widgets/widgets.dart';
 
 Widget _wrapWithApp({
   required Widget child,
@@ -21,7 +27,8 @@ Widget _wrapWithApp({
     providers: [
       ChangeNotifierProvider(create: (_) => LocaleProvider()),
       ChangeNotifierProvider(create: (_) => themeProvider ?? ThemeProvider()),
-      ChangeNotifierProvider(create: (_) => versionProvider ?? VersionProvider()),
+      ChangeNotifierProvider(
+          create: (_) => versionProvider ?? VersionProvider()),
     ],
     child: MaterialApp(
       locale: locale,
@@ -158,5 +165,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(VersionSelector), findsOneWidget);
+    expect(find.byType(Card), findsOneWidget);
   });
 }

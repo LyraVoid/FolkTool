@@ -51,8 +51,8 @@ END
 //
 
 // Icon with lowest ID value placed first to ensure application icon
-// remains consistent on all systems.
-IDI_APP_ICON            ICON                    "resources\\app_icon.ico"
+// remains consistent on all systems. Direct reference prevents stale duplicates.
+IDI_APP_ICON            ICON                    "..\\..\\assets\\icons\\icon.ico"
 
 
 /////////////////////////////////////////////////////////////////////////////
