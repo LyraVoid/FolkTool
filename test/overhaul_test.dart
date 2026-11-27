@@ -142,7 +142,8 @@ void main() {
       expect(settings.confirmBeforeFlash, isTrue);
     });
 
-    testWidgets('ErrorBanner hides retry CTA when unsafe', (tester) async {
+    testWidgets('ErrorBanner hides Retry when canSafelyRetry is false',
+        (tester) async {
       final unsafeError = AppError(
         category: AppErrorCategory.flashing,
         title: 'Flash Interrupted',

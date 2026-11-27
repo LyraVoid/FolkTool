@@ -60,6 +60,10 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
               Text(
                 'KernelPatch Version: ${versionProvider.selectedVersion ?? 'Default'}',
               ),
+              const SizedBox(height: 12),
+              const Text(
+                'This will patch the boot image, reboot to Fastboot, and flash the boot partition. Ensure your bootloader is unlocked and do not disconnect USB during flashing.',
+              ),
             ],
           ),
           actions: [

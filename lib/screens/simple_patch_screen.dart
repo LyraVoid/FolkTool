@@ -67,7 +67,7 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
     if (savedPath != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.savedTo(savedPath)),
+          content: Text(l10n.fileSavedSuccessfully),
           backgroundColor: Colors.green,
         ),
       );
