@@ -24,7 +24,19 @@ class QuickPatchScreen extends StatefulWidget {
 }
 
 class _QuickPatchScreenState extends State<QuickPatchScreen> {
+  final GlobalKey _logConsoleKey = GlobalKey();
   bool _isStarting = false;
+
+  void _scrollToLogs() {
+    final logContext = _logConsoleKey.currentContext;
+    if (logContext != null) {
+      Scrollable.ensureVisible(
+        logContext,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -131,7 +143,22 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
   Widget build(BuildContext context) {
     final l10n = S.of(context);
 
-    return Scaffold(
+    final isRunning = context.select<PatchProvider, bool>((p) => p.isRunning);
+
+    return PopScope(
+      canPop: !isRunning,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Flashing/patching operation is active. Wait or cancel before exiting.',
+              ),
+            ),
+          );
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Text(l10n.oneClickFlash),
         actions: [
@@ -205,6 +232,7 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
                 const Divider(),
                 const SizedBox(height: 16),
                 Selector<PatchProvider, ({List<LogEntry> logs, bool isRunning})>(
+                  key: _logConsoleKey,
                   selector: (_, p) => (
                     logs: List<LogEntry>.unmodifiable(p.logs),
                     isRunning: p.isRunning,
@@ -224,12 +252,14 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
                 _QuickPatchActionBar(
                   isStarting: _isStarting,
                   onStart: _startPatch,
+                  onViewLogs: _scrollToLogs,
                 ),
               ],
             ),
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -237,10 +267,12 @@ class _QuickPatchScreenState extends State<QuickPatchScreen> {
 class _QuickPatchActionBar extends StatelessWidget {
   final bool isStarting;
   final VoidCallback onStart;
+  final VoidCallback onViewLogs;
 
   const _QuickPatchActionBar({
     required this.isStarting,
     required this.onStart,
+    required this.onViewLogs,
   });
 
   @override
@@ -351,6 +383,7 @@ class _QuickPatchActionBar extends StatelessWidget {
                 ErrorBanner(
                   error: state.lastError!,
                   onRetry: state.canRetry ? patchProvider.reset : null,
+                  onViewLogs: onViewLogs,
                   onDismiss: patchProvider.clearError,
                 )
               else

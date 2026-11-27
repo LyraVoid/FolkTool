@@ -243,5 +243,35 @@ void main() {
       expect(pmCalls, 1);
       expect(notifications, afterFirstPollNotifications);
     });
+
+    test('flashBoot captures raw fastboot error when locked', () async {
+      final runner = _FakeProcessRunner((_, args) async {
+        if (args.first == 'devices') {
+          return ProcessResult(1, 0, 'FB001\tfastboot\n', '');
+        }
+        return ProcessResult(
+          1,
+          1,
+          '',
+          'FAILED (remote: Flashing is not allowed in Lock State)',
+        );
+      });
+
+      final service = DeviceService(
+        processRunner: runner,
+        skipBinaryExistsCheck: true,
+      );
+      final dir = await Directory.systemTemp.createTemp('folktool_locked_');
+      final image = File('${dir.path}/boot.img')..writeAsBytesSync([1, 2, 3]);
+      try {
+        expect(await service.flashBoot(image.path), isFalse);
+        expect(
+          service.lastRawError,
+          contains('Flashing is not allowed in Lock State'),
+        );
+      } finally {
+        await dir.delete(recursive: true);
+      }
+    });
   });
 }

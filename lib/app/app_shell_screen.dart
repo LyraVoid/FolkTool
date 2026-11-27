@@ -119,6 +119,17 @@ class _AppShellScreenState extends State<AppShellScreen> {
 
   void _selectNav(int index) {
     if (index == _selectedNavIndex) return;
+    final patchProvider = context.read<PatchProvider>();
+    if (patchProvider.isRunning) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'An operation is currently running. Wait for completion or cancel before leaving this view.',
+          ),
+        ),
+      );
+      return;
+    }
     setState(() => _selectedNavIndex = index);
     if (index == 0) {
       _loadRecentFiles();

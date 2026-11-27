@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/config/app_semantic_colors.dart';
+import '../../../core/errors/app_error.dart';
 import '../../../core/logging/log_entry.dart';
+import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/log_console.dart';
 import '../../../generated/l10n.dart';
 import '../../device/providers/device_provider.dart';
@@ -21,7 +23,19 @@ class StepPatchScreen extends StatefulWidget {
 }
 
 class _StepPatchScreenState extends State<StepPatchScreen> {
+  final GlobalKey _logConsoleKey = GlobalKey();
   int _currentStep = 0;
+
+  void _scrollToLogs() {
+    final logContext = _logConsoleKey.currentContext;
+    if (logContext != null) {
+      Scrollable.ensureVisible(
+        logContext,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -231,8 +245,28 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
             );
           },
         ),
+        Selector<PatchProvider, ({AppError? lastError, bool canRetry})>(
+          selector: (_, p) => (
+            lastError: p.lastError,
+            canRetry: p.canSafelyRetry,
+          ),
+          builder: (context, errState, _) {
+            if (errState.lastError == null) return const SizedBox.shrink();
+            final patchProvider = context.read<PatchProvider>();
+            return Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: ErrorBanner(
+                error: errState.lastError!,
+                onRetry: errState.canRetry ? patchProvider.clearError : null,
+                onViewLogs: _scrollToLogs,
+                onDismiss: patchProvider.clearError,
+              ),
+            );
+          },
+        ),
         const SizedBox(height: 20),
         Selector<PatchProvider, ({List<LogEntry> logs, bool isRunning})>(
+          key: _logConsoleKey,
           selector: (_, p) => (
             logs: List<LogEntry>.unmodifiable(p.logs),
             isRunning: p.isRunning,
@@ -469,10 +503,11 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
                 : () async {
                     final scaffoldMessenger = ScaffoldMessenger.of(context);
                     final deviceProvider = context.read<DeviceProvider>();
+                    final patchProvider = context.read<PatchProvider>();
 
-                    final success = await deviceProvider.flashBoot(
-                      patchedFilePath,
-                      onLog: (_) {},
+                    final success =
+                        await patchProvider.flashPatchedBootOnDevice(
+                      deviceProvider,
                     );
 
                     if (success && context.mounted) {
@@ -505,8 +540,14 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
                       );
                     }
                   },
-            icon: const Icon(Icons.flash_on),
-            label: Text(l10n.flashBoot),
+            icon: isRunning
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.flash_on),
+            label: Text(isRunning ? l10n.flashing : l10n.flashBoot),
           ),
         ] else ...[
           Container(
@@ -532,9 +573,46 @@ class _StepPatchScreenState extends State<StepPatchScreen> {
             ),
           ),
         ],
+        Selector<PatchProvider, ({AppError? lastError, bool canRetry})>(
+          selector: (_, p) => (
+            lastError: p.lastError,
+            canRetry: p.canSafelyRetry,
+          ),
+          builder: (context, errState, _) {
+            if (errState.lastError == null) return const SizedBox.shrink();
+            final patchProvider = context.read<PatchProvider>();
+            return Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: ErrorBanner(
+                error: errState.lastError!,
+                onRetry: errState.canRetry ? patchProvider.clearError : null,
+                onViewLogs: _scrollToLogs,
+                onDismiss: patchProvider.clearError,
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        Selector<PatchProvider, ({List<LogEntry> logs, bool isRunning})>(
+          key: _logConsoleKey,
+          selector: (_, p) => (
+            logs: List<LogEntry>.unmodifiable(p.logs),
+            isRunning: p.isRunning,
+          ),
+          builder: (context, logState, _) {
+            if (logState.logs.isEmpty) return const SizedBox.shrink();
+            final patchProvider = context.read<PatchProvider>();
+            return LogConsole(
+              logs: logState.logs,
+              maxHeight: 200,
+              onExport: () => _exportDiagnostics(context),
+              onClear: logState.isRunning ? null : patchProvider.clearLogs,
+            );
+          },
+        ),
         const SizedBox(height: 24),
         OutlinedButton(
-          onPressed: _prevStep,
+          onPressed: isRunning ? null : _prevStep,
           child: Text(l10n.previousStep),
         ),
       ],

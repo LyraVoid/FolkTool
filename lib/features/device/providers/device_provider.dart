@@ -98,6 +98,7 @@ class DeviceProvider extends ChangeNotifier {
   bool get isManualChecking => _isManualChecking;
   bool get isOperationLocked => _isOperationLocked;
   String? get errorMessage => _errorMessage;
+  String? get lastRawError => _deviceService.lastRawError;
   bool get driverInstalled => _driverInstalled;
   bool get hasAdbDevice => authorizedAdbDevices.isNotEmpty;
   bool get hasFastbootDevice => _fastbootDevices.isNotEmpty;
@@ -374,6 +375,14 @@ class DeviceProvider extends ChangeNotifier {
       imagePath,
       serial: selectedTargetDevice?.serial,
       onLog: onLog ?? (line) => debugPrint('[Flash] $line'),
+    );
+  }
+
+  Future<String?> getActiveSlot({void Function(String)? onLog}) async {
+    if (!hasFastbootDevice) return null;
+    return _deviceService.getActiveSlot(
+      serial: selectedTargetDevice?.serial,
+      onLog: onLog,
     );
   }
 

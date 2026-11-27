@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../../../core/config/app_config.dart';
 import '../../../core/errors/app_error.dart';
 import '../../../core/logging/log_entry.dart';
 import '../../../generated/l10n.dart';
 import '../../device/models/device_info.dart';
 import '../../device/providers/device_provider.dart';
+import '../../device/services/device_service.dart';
 import '../../files/services/file_service.dart';
 import '../models/operation_step.dart';
 import '../services/kptools_service.dart';
@@ -14,9 +16,17 @@ import 'version_provider.dart';
 enum PatchOperationState { idle, running, completed, failed, cancelled }
 
 class PatchProvider extends ChangeNotifier {
-  final KpToolsService _kptoolsService = KpToolsService();
-  final FileService _fileService = FileService();
-  final SafetyService _safetyService = SafetyService();
+  final KpToolsService _kptoolsService;
+  final FileService _fileService;
+  final SafetyService _safetyService;
+
+  PatchProvider({
+    KpToolsService? kptoolsService,
+    FileService? fileService,
+    SafetyService? safetyService,
+  })  : _kptoolsService = kptoolsService ?? KpToolsService(),
+        _fileService = fileService ?? FileService(),
+        _safetyService = safetyService ?? SafetyService();
 
   String? _selectedFilePath;
   String? _patchedFilePath;
@@ -50,6 +60,12 @@ class PatchProvider extends ChangeNotifier {
   AppError? get lastError => _lastError;
   String get operationId => _operationId;
   bool get isRunning => _operationState == PatchOperationState.running;
+  bool get isCriticalOperationInProgress =>
+      isRunning &&
+      (_phase == FlashingPhase.rebootingToFastboot ||
+          _phase == FlashingPhase.fastbootDetection ||
+          _phase == FlashingPhase.flashing ||
+          _phase == FlashingPhase.rebootingToSystem);
   bool get isCompleted => _operationState == PatchOperationState.completed;
   bool get isFailed => _operationState == PatchOperationState.failed;
   bool get canSafelyRetry =>
@@ -129,6 +145,16 @@ class PatchProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _persistSessionLogs() async {
+    if (_logs.isEmpty) return;
+    try {
+      final content = _logs.map((e) => e.toFormattedString()).join('\n');
+      await _fileService.saveLatestSessionLog(content);
+    } catch (_) {
+      // Best-effort crash-safe flush; ignored if documents directory is unavailable (e.g., headless tests).
+    }
+  }
+
   void _failWithError(
     AppError error, {
     FlashingPhase phase = FlashingPhase.failed,
@@ -143,6 +169,7 @@ class PatchProvider extends ChangeNotifier {
       category: error.category,
       technicalDetails: error.technicalDetails,
     );
+    _persistSessionLogs();
     notifyListeners();
   }
 
@@ -162,6 +189,8 @@ class PatchProvider extends ChangeNotifier {
     DeviceProvider deviceProvider,
     VersionProvider versionProvider,
   ) async {
+    if (isRunning) return;
+
     if (_selectedFilePath == null) {
       _failWithError(AppError(
         category: AppErrorCategory.file,
@@ -198,6 +227,9 @@ class PatchProvider extends ChangeNotifier {
 
       final preflight = await _safetyService.runPreflightChecks(
         bootImagePath: _selectedFilePath!,
+        kpimgPath: versionProvider.selectedVersion?.kpimgPath ??
+            AppConfig.fallbackKpimgPath,
+        kpmModules: _selectedKpmModules.toList(growable: false),
         deviceInfo: targetDevice,
         batteryLevel: targetDevice?.batteryLevel,
         checkImageMagic: true,
@@ -382,16 +414,27 @@ class PatchProvider extends ChangeNotifier {
             StepStatus.failed,
             errorMessage: S.current.logWaitFastbootTimeout,
           );
-          _failWithError(AppError(
-            category: AppErrorCategory.fastboot,
-            title: 'Fastboot Device Not Detected',
-            message: S.current.logWaitFastbootTimeout,
-            affectedStage: 'Fastboot Detection',
-            deviceSafe: true,
-            nextSteps:
-                'Check USB cable, install Fastboot/Samsung drivers if needed, and verify device is in bootloader mode.',
-            canSafelyRetry: true,
-          ));
+          final rawAdbErr = deviceProvider.lastRawError;
+          if (rawAdbErr != null && rawAdbErr.isNotEmpty) {
+            _failWithError(
+              DeviceService.classifyAdbError(
+                rawAdbErr,
+                stage: 'Reboot to Fastboot',
+              ),
+            );
+          } else {
+            _failWithError(const AppError(
+              category: AppErrorCategory.fastboot,
+              title: 'Fastboot Device Not Detected',
+              message:
+                  'Timed out waiting for the device to appear in Fastboot mode.',
+              affectedStage: 'Fastboot Detection',
+              deviceSafe: true,
+              nextSteps:
+                  'Check USB cable, install Fastboot/Samsung drivers if needed, and verify device is in bootloader mode.',
+              canSafelyRetry: true,
+            ));
+          }
           return;
         }
       }
@@ -406,10 +449,18 @@ class PatchProvider extends ChangeNotifier {
         return;
       }
 
+      final activeSlot = await deviceProvider.getActiveSlot(
+        onLog: (line) => _addLog(LogLevel.info, line),
+      );
+      if (activeSlot != null && activeSlot.isNotEmpty) {
+        _addLog(LogLevel.info, 'Active Fastboot slot: $activeSlot');
+      }
+
       _phase = FlashingPhase.flashing;
       _currentStepIndex = 5;
       _updateStepStatus(5, StepStatus.inProgress);
       _addLog(LogLevel.info, S.current.logFlashingBoot);
+      await _persistSessionLogs();
 
       final flashSuccess = await deviceProvider.flashBoot(
         _patchedFilePath!,
@@ -422,22 +473,21 @@ class PatchProvider extends ChangeNotifier {
           StepStatus.failed,
           errorMessage: S.current.logFlashFailed,
         );
-        // Critical: never auto-retry after a failed/uncertain flash write.
+        final rawFlashErr = deviceProvider.lastRawError ??
+            (_logs.isNotEmpty ? _logs.last.message : S.current.errFlashBootFailed);
+        final classified = DeviceService.classifyFastbootError(
+          rawFlashErr,
+          stage: 'Flashing',
+          duringFlash: true,
+        );
+        final isPreWriteSafeFailure =
+            classified.category == AppErrorCategory.fastboot &&
+                classified.deviceSafe;
         _failWithError(
-          AppError(
-            category: AppErrorCategory.flashing,
-            title: 'Boot Partition Flash Failed',
-            message: S.current.errFlashBootFailed,
-            reason:
-                'The fastboot flash command returned an error or timed out during partition write.',
-            affectedStage: 'Flashing',
-            deviceSafe: false,
-            nextSteps:
-                'Do NOT disconnect the cable blindly or repeat flashing automatically. Export diagnostics, check bootloader lock & partition logs, and use "Restore Stock Boot" if the device fails to boot.',
-            canSafelyRetry: false,
-            technicalDetails: _logs.isNotEmpty ? _logs.last.message : null,
-          ),
-          phase: FlashingPhase.uncertain,
+          classified,
+          phase: isPreWriteSafeFailure
+              ? FlashingPhase.failed
+              : FlashingPhase.uncertain,
         );
         return;
       }
@@ -473,6 +523,7 @@ class PatchProvider extends ChangeNotifier {
       _phase = FlashingPhase.completed;
       _operationState = PatchOperationState.completed;
       _addLog(LogLevel.success, S.current.logOneClickComplete);
+      await _persistSessionLogs();
       notifyListeners();
     } catch (e) {
       _failWithError(
@@ -496,6 +547,8 @@ class PatchProvider extends ChangeNotifier {
   }
 
   Future<bool> patchOnly(VersionProvider versionProvider) async {
+    if (isRunning) return false;
+
     if (_selectedFilePath == null) {
       _failWithError(AppError(
         category: AppErrorCategory.file,
@@ -522,6 +575,9 @@ class PatchProvider extends ChangeNotifier {
     try {
       final preflight = await _safetyService.runPreflightChecks(
         bootImagePath: _selectedFilePath!,
+        kpimgPath: versionProvider.selectedVersion?.kpimgPath ??
+            AppConfig.fallbackKpimgPath,
+        kpmModules: _selectedKpmModules.toList(growable: false),
         checkImageMagic: true,
         requireConnectedDevice: false,
       );
@@ -568,6 +624,7 @@ class PatchProvider extends ChangeNotifier {
           LogLevel.success,
           S.current.logPatchComplete(_patchedFilePath!),
         );
+        await _persistSessionLogs();
         notifyListeners();
         return true;
       } else {
@@ -635,6 +692,58 @@ class PatchProvider extends ChangeNotifier {
       deviceInfo: deviceInfo,
       redact: redact,
     );
+  }
+
+  /// Flashes [patchedFilePath] in Step-by-Step mode with Fastboot classification & logging.
+  Future<bool> flashPatchedBootOnDevice(DeviceProvider deviceProvider) async {
+    if (isRunning) return false;
+    final imagePath = _patchedFilePath;
+    if (imagePath == null) return false;
+
+    _activeDeviceSerial = deviceProvider.selectedTargetDevice?.serial;
+    _operationId = generateOperationId();
+    _operationState = PatchOperationState.running;
+    _phase = FlashingPhase.flashing;
+    _errorMessage = null;
+    _lastError = null;
+    deviceProvider.setOperationLocked(true);
+    _addLog(LogLevel.info, S.current.logFlashingBoot);
+    await _persistSessionLogs();
+    notifyListeners();
+
+    try {
+      final ok = await deviceProvider.flashBoot(
+        imagePath,
+        onLog: (line) => _addLog(LogLevel.info, line),
+      );
+      if (!ok) {
+        final rawErr = deviceProvider.lastRawError ??
+            (_logs.isNotEmpty ? _logs.last.message : S.current.errFlashBootFailed);
+        final classified = DeviceService.classifyFastbootError(
+          rawErr,
+          stage: 'Step Flash',
+          duringFlash: true,
+        );
+        final isPreWriteSafeFailure =
+            classified.category == AppErrorCategory.fastboot &&
+                classified.deviceSafe;
+        _failWithError(
+          classified,
+          phase: isPreWriteSafeFailure
+              ? FlashingPhase.failed
+              : FlashingPhase.uncertain,
+        );
+        return false;
+      }
+      _phase = FlashingPhase.completed;
+      _operationState = PatchOperationState.completed;
+      _addLog(LogLevel.success, S.current.logFlashSuccess);
+      await _persistSessionLogs();
+      notifyListeners();
+      return true;
+    } finally {
+      deviceProvider.setOperationLocked(false);
+    }
   }
 
   /// Flashes the backed-up stock boot image back to the device in fastboot mode.

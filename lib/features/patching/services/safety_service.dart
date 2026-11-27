@@ -50,25 +50,31 @@ class SafetyService {
   /// Checks whether [path] starts with the standard `ANDROID!` boot image magic.
   static Future<bool> hasAndroidBootMagic(String path) async {
     try {
-      final raf = await File(path).open(mode: FileMode.read);
-      try {
-        final header = await raf.read(8);
-        if (header.length < 8) return false;
-        for (var i = 0; i < 8; i++) {
-          if (header[i] != _androidBootMagic[i]) return false;
-        }
-        return true;
-      } finally {
-        await raf.close();
+      final header = await _readFileHeader(path, 8);
+      if (header.length < 8) return false;
+      for (var i = 0; i < 8; i++) {
+        if (header[i] != _androidBootMagic[i]) return false;
       }
+      return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  static Future<List<int>> _readFileHeader(String path, int length) async {
+    final raf = await File(path).open(mode: FileMode.read);
+    try {
+      return await raf.read(length);
+    } finally {
+      await raf.close();
     }
   }
 
   /// Runs pre-flight checks on required files, device state, and environment.
   Future<PreflightResult> runPreflightChecks({
     required String bootImagePath,
+    String? kpimgPath,
+    List<String> kpmModules = const [],
     DeviceInfo? deviceInfo,
     int? batteryLevel,
     bool checkBinaries = true,
@@ -117,9 +123,76 @@ class SafetyService {
             technicalDetails: bootImagePath,
           ),
         );
-      } else if (checkImageMagic && !await hasAndroidBootMagic(bootImagePath)) {
-        warnings.add(
-          'File header does not start with standard ANDROID! magic (some vendor/LZ4/vendor_boot images differ—verify before flashing).',
+      } else {
+        try {
+          final header = await _readFileHeader(bootImagePath, 8);
+          if (checkImageMagic) {
+            final matchesMagic = header.length >= 8 &&
+                List.generate(8, (i) => header[i] == _androidBootMagic[i])
+                    .every((matched) => matched);
+            if (!matchesMagic) {
+              warnings.add(
+                'File header does not start with standard ANDROID! magic (some vendor/LZ4/vendor_boot images differ—verify before flashing).',
+              );
+            }
+          }
+        } catch (e) {
+          addError(
+            'Boot image is not readable: $bootImagePath',
+            AppError(
+              category: AppErrorCategory.permission,
+              title: 'Cannot Read Boot Image',
+              message:
+                  'FolkTool could not read the selected boot.img file. Check file permissions or close apps locking it.',
+              affectedStage: 'Validation',
+              deviceSafe: true,
+              nextSteps:
+                  'Ensure read permissions on the image file or copy it to a local folder.',
+              canSafelyRetry: true,
+              technicalDetails: e.toString(),
+            ),
+          );
+        }
+      }
+    }
+
+    if (kpimgPath != null && kpimgPath.isNotEmpty) {
+      final kpFile = File(kpimgPath);
+      if (!await kpFile.exists() || await kpFile.length() == 0) {
+        addError(
+          'KernelPatch payload missing or empty: $kpimgPath',
+          AppError(
+            category: AppErrorCategory.file,
+            title: 'Missing KernelPatch Image (kpimg)',
+            message:
+                'The selected KernelPatch version file was not found or is empty.',
+            affectedStage: 'Preflight',
+            deviceSafe: true,
+            nextSteps:
+                'Select a valid built-in or custom kpimg file before patching.',
+            canSafelyRetry: true,
+            technicalDetails: kpimgPath,
+          ),
+        );
+      }
+    }
+
+    for (final kpmPath in kpmModules) {
+      final kpmFile = File(kpmPath);
+      if (!await kpmFile.exists() || await kpmFile.length() == 0) {
+        addError(
+          'KPM module missing or empty: $kpmPath',
+          AppError(
+            category: AppErrorCategory.file,
+            title: 'Invalid KPM Module',
+            message:
+                'One of the selected KPM modules is missing or empty: $kpmPath',
+            affectedStage: 'Preflight',
+            deviceSafe: true,
+            nextSteps: 'Remove the missing KPM module or re-select it.',
+            canSafelyRetry: true,
+            technicalDetails: kpmPath,
+          ),
         );
       }
     }

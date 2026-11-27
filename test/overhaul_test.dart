@@ -102,6 +102,16 @@ void main() {
         connectedDeviceCount: 1,
       );
       expect(unauthResult.passed, isFalse);
+
+      final missingKpResult = await safety.runPreflightChecks(
+        bootImagePath: goodBoot.path,
+        kpimgPath: '${tempDir.path}/missing_kpimg',
+        kpmModules: ['${tempDir.path}/missing.kpm'],
+        checkBinaries: false,
+      );
+      expect(missingKpResult.passed, isFalse);
+      expect(missingKpResult.errors.length, 2);
+      expect(missingKpResult.primaryError?.category, AppErrorCategory.file);
     });
   });
 
@@ -159,8 +169,9 @@ void main() {
       expect(settings.confirmBeforeFlash, isTrue);
     });
 
-    testWidgets('ErrorBanner hides Retry when canSafelyRetry is false',
+    testWidgets('ErrorBanner hides Retry when canSafelyRetry is false and fires onViewLogs',
         (tester) async {
+      var viewedLogs = false;
       final unsafeError = AppError(
         category: AppErrorCategory.flashing,
         title: 'Flash Interrupted',
@@ -174,6 +185,7 @@ void main() {
         ErrorBanner(
           error: unsafeError,
           onRetry: () {},
+          onViewLogs: () => viewedLogs = true,
         ),
       ));
       await tester.pumpAndSettle();
@@ -181,9 +193,13 @@ void main() {
       expect(find.text('Flash Interrupted'), findsOneWidget);
       expect(find.text('Check Device State'), findsOneWidget);
       expect(find.text('Retry'), findsNothing);
+
+      await tester.tap(find.text('View Logs'));
+      await tester.pumpAndSettle();
+      expect(viewedLogs, isTrue);
     });
 
-    testWidgets('LogConsole filters by search text and log level',
+    testWidgets('LogConsole filters by search text, log level, and expands technical details',
         (tester) async {
       final logs = [
         LogEntry(
@@ -195,6 +211,7 @@ void main() {
           timestamp: DateTime(2026, 1, 1, 12, 0, 1),
           level: LogLevel.error,
           message: 'Boot image magic missing',
+          technicalDetails: 'FAILED (remote: header mismatch)',
         ),
       ];
 
@@ -203,6 +220,11 @@ void main() {
 
       expect(find.textContaining('Checking ADB server'), findsOneWidget);
       expect(find.textContaining('Boot image magic missing'), findsOneWidget);
+      expect(find.textContaining('FAILED (remote: header mismatch)'), findsNothing);
+
+      await tester.tap(find.byIcon(Icons.expand_more));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('FAILED (remote: header mismatch)'), findsOneWidget);
 
       await tester.tap(find.text('Err'));
       await tester.pumpAndSettle();

@@ -235,6 +235,68 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     const Divider(height: 1),
                     ListTile(
+                      leading: const Icon(Icons.folder_outlined),
+                      title: const Text('Open logs & backup folders'),
+                      subtitle: const Text(
+                        'View exported logs, crash-safe session logs, and stock boot backups',
+                      ),
+                      trailing: Wrap(
+                        spacing: AppSpacing.xs,
+                        children: [
+                          OutlinedButton(
+                            onPressed: () async {
+                              final fs = FileService();
+                              final dir = await fs.getLogsDirectory();
+                              await fs.openDirectory(dir);
+                            },
+                            child: const Text('Logs'),
+                          ),
+                          OutlinedButton(
+                            onPressed: () async {
+                              final fs = FileService();
+                              final dir = await fs.getBackupDirectory();
+                              await fs.openDirectory(dir);
+                            },
+                            child: const Text('Backups'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.delete_sweep_outlined),
+                      title: const Text('Clear saved log files on disk'),
+                      subtitle: const Text(
+                        'Deletes archived .txt and .log files inside FolkTool/logs (stock boot backups are untouched)',
+                      ),
+                      trailing: OutlinedButton(
+                        onPressed: () async {
+                          final ok = await _confirmAction(
+                            context,
+                            title: 'Delete Saved Log Files?',
+                            message:
+                                'All saved log files in FolkTool/logs will be permanently deleted. Your boot images and backups remain untouched.',
+                            confirmLabel: 'Delete Logs',
+                          );
+                          if (!ok) return;
+                          final count = await FileService().clearSavedLogs();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  count == 0
+                                      ? 'No saved log files to delete'
+                                      : 'Deleted $count saved log file(s)',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('Delete'),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
                       leading: Icon(
                         Icons.restart_alt_rounded,
                         color: colorScheme.error,

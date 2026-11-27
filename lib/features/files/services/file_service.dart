@@ -127,6 +127,33 @@ class FileService {
     return outputPath;
   }
 
+  /// Writes/overwrites the rolling latest-session log file for crash/restart diagnostics.
+  Future<String> saveLatestSessionLog(String content) async {
+    final logsDir = await getLogsDirectory();
+    final sessionFile = File(p.join(logsDir, 'session_latest.log'));
+    await sessionFile.writeAsString(content, flush: true);
+    return sessionFile.path;
+  }
+
+  /// Deletes saved `.txt` / `.log` files inside [getLogsDirectory] (never touches boot images).
+  Future<int> clearSavedLogs() async {
+    final logsDir = Directory(await getLogsDirectory());
+    if (!await logsDir.exists()) return 0;
+    var deleted = 0;
+    await for (final entity in logsDir.list(followLinks: false)) {
+      if (entity is File &&
+          (entity.path.endsWith('.txt') || entity.path.endsWith('.log'))) {
+        try {
+          await entity.delete();
+          deleted++;
+        } catch (_) {
+          // Skip files currently locked by another viewer.
+        }
+      }
+    }
+    return deleted;
+  }
+
   Future<List<String>> getRecentFiles() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList(AppConfig.recentFilesKey) ?? [];
@@ -191,6 +218,25 @@ class FileService {
   Future<void> clearRecentFiles() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(AppConfig.recentFilesKey);
+  }
+
+  /// Opens a folder directly in Windows Explorer (or system file manager).
+  Future<bool> openDirectory(String dirPath) async {
+    try {
+      final dir = Directory(p.normalize(dirPath));
+      if (!await dir.exists()) return false;
+      if (Platform.isWindows) {
+        await Process.run('explorer.exe', [dir.path]);
+        return true;
+      }
+      await Process.run(
+        Platform.isMacOS ? 'open' : 'xdg-open',
+        [dir.path],
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Opens the containing folder in Windows Explorer (or system file manager).

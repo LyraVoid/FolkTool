@@ -11,6 +11,10 @@ typedef LogCallback = void Function(String line);
 class DeviceService {
   final ProcessRunner _processRunner;
   final bool _skipBinaryExistsCheck;
+  String? _lastRawError;
+
+  /// Raw stdout/stderr or exception text from the most recent failed ADB/Fastboot call.
+  String? get lastRawError => _lastRawError;
 
   DeviceService({
     ProcessRunner? processRunner,
@@ -179,6 +183,7 @@ class DeviceService {
   }
 
   Future<bool> rebootToFastboot({String? serial, LogCallback? onLog}) async {
+    _lastRawError = null;
     try {
       onLog?.call(S.current.logRebootingToFastboot);
       final args = <String>[
@@ -192,10 +197,13 @@ class DeviceService {
         onLog?.call(S.current.logRebootCmdSent);
         return true;
       } else {
+        final raw = '${result.stderr}\n${result.stdout}'.trim();
+        _lastRawError = raw.isNotEmpty ? raw : 'adb exited with code ${result.exitCode}';
         onLog?.call(S.current.errRebootFailed(result.stderr));
         return false;
       }
     } catch (e) {
+      _lastRawError = e.toString();
       onLog?.call(S.current.errRebootException(e));
       return false;
     }
@@ -232,19 +240,21 @@ class DeviceService {
     String? serial,
     LogCallback? onLog,
   }) async {
+    _lastRawError = null;
     try {
       final imageFile = File(imagePath);
       if (!await imageFile.exists()) {
-        onLog?.call('Boot image file not found: $imagePath');
+        _lastRawError = 'Boot image file not found: $imagePath';
+        onLog?.call(_lastRawError!);
         return false;
       }
 
       if (serial == null) {
         final devices = await getFastbootDevices(onLog: onLog);
         if (devices.length != 1) {
-          onLog?.call(
-            'Refusing to flash: expected 1 fastboot device, found ${devices.length}.',
-          );
+          _lastRawError =
+              'Expected 1 fastboot device, found ${devices.length}.';
+          onLog?.call('Refusing to flash: $_lastRawError');
           return false;
         }
       }
@@ -269,10 +279,13 @@ class DeviceService {
         return true;
       } else {
         final errText = '${result.stderr}\n${result.stdout}'.trim();
+        _lastRawError =
+            errText.isNotEmpty ? errText : 'fastboot exited with code ${result.exitCode}';
         onLog?.call(S.current.errFlashFailed(errText));
         return false;
       }
     } catch (e) {
+      _lastRawError = e.toString();
       onLog?.call(S.current.errFlashException(e));
       return false;
     }
@@ -379,6 +392,32 @@ class DeviceService {
       return match?.group(1);
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Queries the active A/B slot (`a`/`b`) if the device supports slots, otherwise `null`.
+  Future<String?> getActiveSlot({String? serial, LogCallback? onLog}) =>
+      getFastbootVar('current-slot', serial: serial, onLog: onLog);
+
+  /// Ensures the ADB server daemon can start cleanly.
+  Future<bool> ensureAdbServerStarted({LogCallback? onLog}) async {
+    _lastRawError = null;
+    try {
+      if (!_skipBinaryExistsCheck && !await File(AppConfig.adbPath).exists()) {
+        _lastRawError = S.current.errAdbNotExist(AppConfig.adbPath);
+        onLog?.call(_lastRawError!);
+        return false;
+      }
+      final res = await _runAdb(['start-server'], onLog: onLog);
+      if (res.exitCode != 0) {
+        final raw = '${res.stderr}\n${res.stdout}'.trim();
+        _lastRawError = raw.isNotEmpty ? raw : 'adb start-server exited ${res.exitCode}';
+        return false;
+      }
+      return true;
+    } catch (e) {
+      _lastRawError = e.toString();
+      return false;
     }
   }
 

@@ -24,7 +24,19 @@ class SimplePatchScreen extends StatefulWidget {
 
 class _SimplePatchScreenState extends State<SimplePatchScreen> {
   final FileService _fileService = FileService();
+  final GlobalKey _logConsoleKey = GlobalKey();
   bool _isSaving = false;
+
+  void _scrollToLogs() {
+    final logContext = _logConsoleKey.currentContext;
+    if (logContext != null) {
+      Scrollable.ensureVisible(
+        logContext,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -147,9 +159,11 @@ class _SimplePatchScreenState extends State<SimplePatchScreen> {
                   isSaving: _isSaving,
                   onStart: _startPatch,
                   onSave: _savePatchedFile,
+                  onViewLogs: _scrollToLogs,
                 ),
                 const SizedBox(height: 20),
                 Selector<PatchProvider, ({List<LogEntry> logs, bool isRunning})>(
+                  key: _logConsoleKey,
                   selector: (_, p) => (
                     logs: List<LogEntry>.unmodifiable(p.logs),
                     isRunning: p.isRunning,
@@ -178,11 +192,13 @@ class _SimplePatchActionBar extends StatelessWidget {
   final bool isSaving;
   final VoidCallback onStart;
   final VoidCallback onSave;
+  final VoidCallback onViewLogs;
 
   const _SimplePatchActionBar({
     required this.isSaving,
     required this.onStart,
     required this.onSave,
+    required this.onViewLogs,
   });
 
   @override
@@ -315,6 +331,7 @@ class _SimplePatchActionBar extends StatelessWidget {
                 ErrorBanner(
                   error: state.lastError!,
                   onRetry: state.canRetry ? patchProvider.reset : null,
+                  onViewLogs: onViewLogs,
                   onDismiss: patchProvider.clearError,
                 )
               else

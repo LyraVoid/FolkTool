@@ -30,6 +30,7 @@ class _LogConsoleState extends State<LogConsole> {
   String _searchQuery = '';
   LogLevel? _levelFilter;
   late bool _autoScrollEnabled;
+  final Set<int> _expandedEntryHashes = {};
 
   // Memoized filter cache to avoid re-scanning large log lists on UI toggles.
   List<LogEntry>? _cachedFiltered;
@@ -76,6 +77,9 @@ class _LogConsoleState extends State<LogConsole> {
   @override
   void didUpdateWidget(LogConsole oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.logs.isEmpty) {
+      _expandedEntryHashes.clear();
+    }
     if (_autoScrollEnabled && widget.logs.length != oldWidget.logs.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
@@ -383,31 +387,99 @@ class _LogConsoleState extends State<LogConsole> {
                       itemBuilder: (context, index) {
                         final log = visibleLogs[index];
                         final lineColor = _getLogColor(log.level, semantic);
+                        final hasDetails = log.technicalDetails != null &&
+                            log.technicalDetails!.trim().isNotEmpty;
+                        final entryKey = identityHashCode(log);
+                        final isExpanded =
+                            hasDetails && _expandedEntryHashes.contains(entryKey);
+
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Icon(
-                                  _getLogIcon(log.level),
-                                  color: lineColor,
-                                  size: 13,
-                                ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Icon(
+                                      _getLogIcon(log.level),
+                                      color: lineColor,
+                                      size: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: SelectableText(
+                                      log.toFormattedString(),
+                                      style: TextStyle(
+                                        color: lineColor,
+                                        fontSize: 11.5,
+                                        fontFamily: 'Consolas',
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ),
+                                  if (hasDetails)
+                                    IconButton(
+                                      icon: Icon(
+                                        isExpanded
+                                            ? Icons.expand_less
+                                            : Icons.expand_more,
+                                        size: 14,
+                                        color: muted,
+                                      ),
+                                      tooltip: isExpanded
+                                          ? 'Hide Technical Details'
+                                          : 'Show Technical Details',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 22,
+                                        minHeight: 20,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          if (isExpanded) {
+                                            _expandedEntryHashes
+                                                .remove(entryKey);
+                                          } else {
+                                            _expandedEntryHashes.add(entryKey);
+                                          }
+                                        });
+                                      },
+                                    ),
+                                ],
                               ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: SelectableText(
-                                  log.toFormattedString(),
-                                  style: TextStyle(
-                                    color: lineColor,
-                                    fontSize: 11.5,
-                                    fontFamily: 'Consolas',
-                                    height: 1.35,
+                              if (isExpanded)
+                                Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.only(
+                                    left: 19,
+                                    top: 4,
+                                    bottom: 4,
+                                  ),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: semantic.terminalForeground
+                                        .withValues(alpha: 0.06),
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadius.xs),
+                                    border: Border.all(
+                                      color: semantic.terminalForeground
+                                          .withValues(alpha: 0.14),
+                                    ),
+                                  ),
+                                  child: SelectableText(
+                                    log.technicalDetails!,
+                                    style: TextStyle(
+                                      color: muted,
+                                      fontSize: 11,
+                                      fontFamily: 'Consolas',
+                                      height: 1.35,
+                                    ),
                                   ),
                                 ),
-                              ),
                             ],
                           ),
                         );
