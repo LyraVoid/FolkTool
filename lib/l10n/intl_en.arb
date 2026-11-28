@@ -263,5 +263,10 @@
   "noVersionsAvailable": "No versions available",
 
   "patchTarget": "Patch Target",
-  "patchTargetDesc": "Select patch target to use corresponding KernelPatch version"
+  "patchTargetDesc": "Select patch target to use corresponding KernelPatch version",
+  "switchTheme": "Switch Theme",
+  "themeSystem": "Follow System",
+  "themeLight": "Light Mode",
+  "themeDark": "Dark Mode",
+  "logsCopied": "Logs copied to clipboard"
 }

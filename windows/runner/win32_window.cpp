@@ -1,5 +1,6 @@
 #include "win32_window.h"
 
+#include <algorithm>
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
@@ -134,10 +135,30 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  int scaled_width = Scale(size.width, scale_factor);
+  int scaled_height = Scale(size.height, scale_factor);
+  int window_x = Scale(origin.x, scale_factor);
+  int window_y = Scale(origin.y, scale_factor);
+
+  // Clamp window size and position to the monitor's usable work area (excluding taskbar)
+  MONITORINFO monitor_info{};
+  monitor_info.cbSize = sizeof(MONITORINFO);
+  if (GetMonitorInfo(monitor, &monitor_info)) {
+    const RECT& work = monitor_info.rcWork;
+    const int work_width = work.right - work.left;
+    const int work_height = work.bottom - work.top;
+
+    scaled_width = (std::min)(scaled_width, work_width);
+    scaled_height = (std::min)(scaled_height, work_height);
+
+    // Center comfortably inside the work area so it never overlaps the taskbar
+    window_x = work.left + (work_width - scaled_width) / 2;
+    window_y = work.top + (work_height - scaled_height) / 2;
+  }
+
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
+      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
+      window_x, window_y, scaled_width, scaled_height,
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {
@@ -212,6 +233,25 @@ Win32Window::MessageHandler(HWND hwnd,
         SetFocus(child_content_);
       }
       return 0;
+
+    case WM_GETMINMAXINFO: {
+      auto min_max_info = reinterpret_cast<MINMAXINFO*>(lparam);
+      HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+      UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
+      double scale_factor = dpi / 96.0;
+      LONG min_width = Scale(420, scale_factor);
+      LONG min_height = Scale(560, scale_factor);
+      MONITORINFO monitor_info{};
+      monitor_info.cbSize = sizeof(MONITORINFO);
+      if (GetMonitorInfo(monitor, &monitor_info)) {
+        const RECT& work = monitor_info.rcWork;
+        min_width = (std::min)(min_width, work.right - work.left);
+        min_height = (std::min)(min_height, work.bottom - work.top);
+      }
+      min_max_info->ptMinTrackSize.x = min_width;
+      min_max_info->ptMinTrackSize.y = min_height;
+      return 0;
+    }
 
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);

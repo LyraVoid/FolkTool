@@ -263,5 +263,10 @@
   "noVersionsAvailable": "没有可用的版本",
 
   "patchTarget": "修补目标",
-  "patchTargetDesc": "选择修补目标以使用对应的 KernelPatch 版本"
+  "patchTargetDesc": "选择修补目标以使用对应的 KernelPatch 版本",
+  "switchTheme": "切换主题",
+  "themeSystem": "跟随系统",
+  "themeLight": "浅色模式",
+  "themeDark": "深色模式",
+  "logsCopied": "日志已复制到剪贴板"
 }

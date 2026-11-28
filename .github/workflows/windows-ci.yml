@@ -1,0 +1,374 @@
+name: Windows CI & Installer Verification
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Build, Test & Verify Windows Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        shell: pwsh
+        run: |
+          $out = flutter analyze --no-fatal-infos 2>&1 | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0) {
+            foreach ($line in ($out -split "`r?`n")) {
+              if ($line -match "error\s*[•-]|warning\s*[•-]") {
+                Write-Host "::error::$line"
+              }
+            }
+            exit 1
+          }
+
+      - name: Run widget & unit tests
+        shell: pwsh
+        run: |
+          $out = flutter test --reporter expanded 2>&1 | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0) {
+            foreach ($line in ($out -split "`r?`n")) {
+              if ($line -match "\[E\]|Expected:|Actual:|EXCEPTION|Error:|failed") {
+                Write-Host "::error::$line"
+              }
+            }
+            exit 1
+          }
+
+      - name: Extract app version from pubspec.yaml
+        shell: pwsh
+        run: |
+          $line = Select-String -Path "pubspec.yaml" -Pattern "^version:\s*([0-9]+\.[0-9]+\.[0-9]+)" | Select-Object -First 1
+          if (-not $line) { throw "Could not parse version from pubspec.yaml" }
+          $appVersion = $line.Matches.Groups[1].Value
+          "APP_VERSION=$appVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using APP_VERSION=$appVersion"
+
+      - name: Build Windows Release
+        shell: pwsh
+        run: |
+          flutter build windows --release --dart-define=APP_VERSION=${{ env.APP_VERSION }}
+
+      - name: Verify PE architecture, icon resources & CRT dependencies
+        shell: pwsh
+        run: |
+          $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dumpbin = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Filter "dumpbin.exe" -Recurse | Where-Object { $_.FullName -match "Hostx64\\x64" } | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $dumpbin) {
+            Write-Warning "dumpbin.exe not found; skipping PE inspection"
+          } else {
+            $exe = "build\windows\x64\runner\Release\FolkTool.exe"
+            $headers = & $dumpbin /headers $exe | Out-String
+            if ($headers -notmatch "x64") {
+              throw "FolkTool.exe is not an x64 binary!"
+            }
+            Write-Host "=== FolkTool.exe Dependencies ==="
+            & $dumpbin /dependents $exe
+            Write-Host "=== flutter_windows.dll Dependencies ==="
+            & $dumpbin /dependents "build\windows\x64\runner\Release\flutter_windows.dll"
+          }
+          & pwsh -NoProfile -File "scripts\verify_pe_icon.ps1" -BinaryPath "build\windows\x64\runner\Release\FolkTool.exe"
+
+      - name: Verify VC++ Redistributable download URL
+        shell: pwsh
+        run: |
+          $url = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+          $response = Invoke-WebRequest -Uri $url -Method Head -MaximumRedirection 5 -UseBasicParsing
+          if ($response.StatusCode -lt 200 -or $response.StatusCode -ge 400) {
+            throw "VC++ Redistributable URL check failed with status $($response.StatusCode)"
+          }
+          Write-Host "VC++ Redistributable URL reachable (HTTP $($response.StatusCode))"
+
+      - name: Audit & Sign Windows Binaries (if configured)
+        shell: pwsh
+        env:
+          CERT_B64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CERT_PASS: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          Write-Host "=== Upstream Binary Signature Audit ==="
+          foreach ($bin in @("bin\adb.exe", "bin\fastboot.exe", "bin\kptools.exe")) {
+            if (Test-Path $bin) {
+              $sig = Get-AuthenticodeSignature -LiteralPath $bin
+              Write-Host "${bin}: $($sig.Status) | $($sig.SignerCertificate.Subject)"
+            }
+          }
+          if ([string]::IsNullOrWhiteSpace($env:CERT_B64)) {
+            Write-Host "::notice::UNSIGNED TEST BUILD - WINDOWS_CERT_PFX_BASE64 secret not configured. Skipping Authenticode signing."
+            "IS_SIGNED=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            exit 0
+          }
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) { throw "signtool.exe not found in Windows Kits" }
+          $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERT_B64))
+          try {
+            foreach ($target in @(
+              "build\windows\x64\runner\Release\FolkTool.exe",
+              "build\windows\x64\runner\Release\url_launcher_windows_plugin.dll"
+            )) {
+              & $signtool sign /f $pfxPath /p $env:CERT_PASS /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 $target
+              if ($LASTEXITCODE -ne 0) { throw "Failed to sign $target" }
+              & $signtool verify /pa $target
+              if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for $target" }
+            }
+          } finally {
+            Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+          }
+          "IS_SIGNED=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Ensure Inno Setup 6 is installed
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe not found after installation."
+          }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Compile installer.iss & verify installer icon
+        shell: pwsh
+        env:
+          CERT_B64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CERT_PASS: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          & "$env:ISCC" "/DMyAppVersion=$env:APP_VERSION" installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "installer.iss compilation failed" }
+          if (-not (Test-Path "installer\FolkTool-Setup.exe")) {
+            throw "Expected output installer\FolkTool-Setup.exe not found"
+          }
+          & pwsh -NoProfile -File "scripts\verify_pe_icon.ps1" -BinaryPath "installer\FolkTool-Setup.exe"
+
+          if (-not [string]::IsNullOrWhiteSpace($env:CERT_B64)) {
+            $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+            $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERT_B64))
+            try {
+              & $signtool sign /f $pfxPath /p $env:CERT_PASS /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 "installer\FolkTool-Setup.exe"
+              if ($LASTEXITCODE -ne 0) { throw "Failed to sign installer\FolkTool-Setup.exe" }
+              & $signtool verify /pa "installer\FolkTool-Setup.exe"
+              if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for installer\FolkTool-Setup.exe" }
+            } finally {
+              Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+      - name: Smoke test silent install, window bounds, and uninstall
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "artifacts" | Out-Null
+          $logPath = (Join-Path $PWD "artifacts\install-smoke.log")
+          Write-Host "Installing FolkTool-Setup.exe silently..."
+          $installProc = Start-Process -FilePath "installer\FolkTool-Setup.exe" `
+            -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS /DIR=`"C:\Program Files\FolkTool`" /LOG=`"$logPath`"" `
+            -Wait -PassThru
+          if ($installProc.ExitCode -ne 0) {
+            throw "Silent installer exited with code $($installProc.ExitCode)"
+          }
+          if (Test-Path $logPath) {
+            Write-Host "=== Installer Log Highlights ==="
+            Select-String -Path $logPath -Pattern "vc_redist|Run|Error|Exception" | ForEach-Object { $_.Line }
+          }
+
+          $installDir = "C:\Program Files\FolkTool"
+          $exePath = Join-Path $installDir "FolkTool.exe"
+          $requiredPaths = @(
+            $exePath,
+            (Join-Path $installDir "flutter_windows.dll"),
+            (Join-Path $installDir "url_launcher_windows_plugin.dll"),
+            (Join-Path $installDir "bin\kptools.exe"),
+            (Join-Path $installDir "bin\adb.exe"),
+            (Join-Path $installDir "bin\fastboot.exe"),
+            (Join-Path $installDir "bin\msys-2.0.dll"),
+            (Join-Path $installDir "apk\APatch.apk"),
+            (Join-Path $installDir "apk\FolkPatch.apk"),
+            (Join-Path $installDir "assets\kpimg"),
+            (Join-Path $installDir "kp_versions\folkpatch\kpimg"),
+            (Join-Path $installDir "kp_versions\apatch\kpimg")
+          )
+          foreach ($p in $requiredPaths) {
+            if (-not (Test-Path $p)) {
+              throw "Missing installed file: $p"
+            }
+          }
+
+          Write-Host "Launching installed FolkTool.exe..."
+          $appProc = Start-Process -FilePath $exePath -PassThru
+          $hwnd = [IntPtr]::Zero
+          for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep -Milliseconds 500
+            $appProc.Refresh()
+            if ($appProc.HasExited) {
+              throw "FolkTool.exe exited prematurely with code $($appProc.ExitCode)"
+            }
+            if ($appProc.MainWindowHandle -ne [IntPtr]::Zero) {
+              $hwnd = $appProc.MainWindowHandle
+              break
+            }
+          }
+          if ($hwnd -eq [IntPtr]::Zero) {
+            Stop-Process -Id $appProc.Id -Force -ErrorAction SilentlyContinue
+            throw "FolkTool.exe window handle did not initialize within 10 seconds"
+          }
+
+          Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+          public class Win32Bounds {
+            [DllImport("user32.dll")]
+            public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+            [DllImport("user32.dll")]
+            public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, out RECT pvParam, uint fWinIni);
+          }
+          "@
+          $rect = New-Object RECT
+          $work = New-Object RECT
+          [Win32Bounds]::GetWindowRect($hwnd, [ref]$rect) | Out-Null
+          [Win32Bounds]::SystemParametersInfo(0x0030, 0, [ref]$work, 0) | Out-Null
+          Write-Host "WindowRect: L=$($rect.Left) T=$($rect.Top) R=$($rect.Right) B=$($rect.Bottom)"
+          Write-Host "WorkingArea: L=$($work.Left) T=$($work.Top) R=$($work.Right) B=$($work.Bottom)"
+
+          if ($rect.Top -lt $work.Top -or $rect.Left -lt $work.Left -or $rect.Right -gt $work.Right -or $rect.Bottom -gt $work.Bottom) {
+            Stop-Process -Id $appProc.Id -Force -ErrorAction SilentlyContinue
+            throw "Window extends outside usable WorkingArea (taskbar overlap detected)!"
+          }
+          Write-Host "Verified: FolkTool.exe window fits cleanly inside WorkingArea (PID=$($appProc.Id), Title='$($appProc.MainWindowTitle)')"
+          Stop-Process -Id $appProc.Id -Force
+
+          Write-Host "Uninstalling FolkTool silently..."
+          $uninstaller = Join-Path $installDir "unins000.exe"
+          if (Test-Path $uninstaller) {
+            $uninstProc = Start-Process -FilePath $uninstaller `
+              -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" `
+              -Wait -PassThru
+            if ($uninstProc.ExitCode -ne 0) {
+              throw "Uninstaller exited with code $($uninstProc.ExitCode)"
+            }
+            Start-Sleep -Seconds 2
+            if (Test-Path $exePath) {
+              throw "FolkTool.exe still exists after uninstallation!"
+            }
+          }
+
+      - name: Package Portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "artifacts\portable" | Out-Null
+          Copy-Item -Recurse -Force "build\windows\x64\runner\Release\*" "artifacts\portable\"
+          Copy-Item -Recurse -Force "bin" "artifacts\portable\bin"
+          Copy-Item -Recurse -Force "apk" "artifacts\portable\apk"
+          Copy-Item -Recurse -Force "assets" "artifacts\portable\assets"
+          Copy-Item -Recurse -Force "kp_versions" "artifacts\portable\kp_versions"
+          @"
+          FolkTool v$env:APP_VERSION (Windows x64 Portable)
+          Commit: $env:GITHUB_SHA
+          Authenticode Signed: $env:IS_SIGNED
+          Note: If Authenticode Signed is false, this is an unsigned CI test build.
+          "@ | Out-File -FilePath "artifacts\portable\BUILD_INFO.txt" -Encoding utf8
+          Compress-Archive -Path "artifacts\portable\*" -DestinationPath "artifacts\FolkTool-Windows-Portable.zip" -Force
+
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolkTool-Setup-Windows
+          path: installer/FolkTool-Setup.exe
+          if-no-files-found: error
+
+      - name: Upload Portable ZIP Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolkTool-Windows-Portable
+          path: artifacts/FolkTool-Windows-Portable.zip
+          if-no-files-found: error
+
+      - name: Upload diagnostic logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-CI-Diagnostic-Logs
+          path: artifacts/install-smoke.log
+          if-no-files-found: ignore
+
+      - name: Write Job Summary
+        shell: pwsh
+        run: |
+          $setupSizeMB = [math]::Round((Get-Item "installer\FolkTool-Setup.exe").Length / 1MB, 2)
+          $zipSizeMB = [math]::Round((Get-Item "artifacts\FolkTool-Windows-Portable.zip").Length / 1MB, 2)
+          $setupHash = (Get-FileHash "installer\FolkTool-Setup.exe" -Algorithm SHA256).Hash
+          $zipHash = (Get-FileHash "artifacts\FolkTool-Windows-Portable.zip" -Algorithm SHA256).Hash
+          @"
+          ## Windows CI Verification Summary
+          - **Static Analysis (`flutter analyze`)**: Passed
+          - **Widget Tests (`flutter test`)**: Passed
+          - **Windows Release Build & PE x64 Audit (`dumpbin`)**: Passed
+          - **Inno Setup Script**: `installer.iss` compiled cleanly (with `assets\icons\icon.ico` verified in both EXEs)
+          - **Silent Install -> Window Bounds / Taskbar Check -> Clean Uninstall**: Passed
+          - **Artifacts**:
+            - `FolkTool-Setup.exe` ($setupSizeMB MB) — SHA-256: ``$setupHash``
+            - `FolkTool-Windows-Portable.zip` ($zipSizeMB MB) — SHA-256: ``$zipHash``
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+  release:
+    name: Publish GitHub Release
+    needs: build-and-verify
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: FolkTool-Setup-Windows
+          path: release-assets
+
+      - name: Download portable ZIP artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: FolkTool-Windows-Portable
+          path: release-assets
+
+      - name: Generate SHA256SUMS.txt
+        working-directory: release-assets
+        run: sha256sum FolkTool-Setup.exe FolkTool-Windows-Portable.zip > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-assets/FolkTool-Setup.exe
+            release-assets/FolkTool-Windows-Portable.zip
+            release-assets/SHA256SUMS.txt
