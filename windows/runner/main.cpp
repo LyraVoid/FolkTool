@@ -13,6 +13,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  // Expose a session-scoped named mutex so the Inno Setup installer and
+  // uninstaller can reliably detect and close running instances.
+  HANDLE instance_mutex =
+      ::CreateMutexW(nullptr, FALSE, L"Local\\FolkToolRunningMutex");
+
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -28,6 +33,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1040, 760);
   if (!window.Create(L"FolkTool", origin, size)) {
+    if (instance_mutex != nullptr) {
+      ::CloseHandle(instance_mutex);
+    }
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
@@ -38,6 +46,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::DispatchMessage(&msg);
   }
 
+  if (instance_mutex != nullptr) {
+    ::CloseHandle(instance_mutex);
+  }
   ::CoUninitialize();
   return EXIT_SUCCESS;
 }

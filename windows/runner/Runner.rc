@@ -90,10 +90,10 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "FolkTool" "\0"
-            VALUE "FileDescription", "FolkTool - KernelPatch 自动刷入工具" "\0"
+            VALUE "FileDescription", "FolkTool - Android Boot & KernelPatch Flashing Utility" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "folktool" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 FolkTool. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Matsuzaka Yuki (GPL-3.0)" "\0"
             VALUE "OriginalFilename", "FolkTool.exe" "\0"
             VALUE "ProductName", "FolkTool" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

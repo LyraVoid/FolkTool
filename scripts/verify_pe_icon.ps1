@@ -7,13 +7,33 @@ param(
 $ErrorActionPreference = "Stop"
 
 $icoBytes = [IO.File]::ReadAllBytes((Resolve-Path $IconPath))
-$payloadOffset = [BitConverter]::ToUInt32($icoBytes, 18)
-$payloadSize = [BitConverter]::ToUInt32($icoBytes, 14)
-$payload = New-Object byte[] $payloadSize
-[Array]::Copy($icoBytes, $payloadOffset, $payload, 0, $payloadSize)
+$iconCount = [BitConverter]::ToUInt16($icoBytes, 4)
+if ($iconCount -lt 5) {
+  throw "$IconPath contains only $iconCount image(s); expected multi-resolution icon (16, 32, 48, 64, 256+)."
+}
 
 $sha = [System.Security.Cryptography.SHA256]::Create()
-$expectedHash = ([BitConverter]::ToString($sha.ComputeHash($payload))).Replace("-", "").ToLowerInvariant()
+$expectedEntries = @()
+for ($i = 0; $i -lt $iconCount; $i++) {
+  $dirOff = 6 + ($i * 16)
+  $w = $icoBytes[$dirOff]
+  if ($w -eq 0) { $w = 256 }
+  $h = $icoBytes[$dirOff + 1]
+  if ($h -eq 0) { $h = 256 }
+  $payloadSize = [BitConverter]::ToUInt32($icoBytes, $dirOff + 8)
+  $payloadOffset = [BitConverter]::ToUInt32($icoBytes, $dirOff + 12)
+  $payload = New-Object byte[] $payloadSize
+  [Array]::Copy($icoBytes, $payloadOffset, $payload, 0, $payloadSize)
+  $hash = ([BitConverter]::ToString($sha.ComputeHash($payload))).Replace("-", "").ToLowerInvariant()
+  $expectedEntries += [PSCustomObject]@{ Size = "${w}x${h}"; Width = $w; Hash = $hash }
+}
+
+$presentWidths = $expectedEntries.Width
+foreach ($req in @(16, 32, 48, 64, 256)) {
+  if ($presentWidths -notcontains $req) {
+    throw "$IconPath is missing required resolution ${req}x${req}."
+  }
+}
 
 Add-Type @"
 using System;
@@ -72,8 +92,14 @@ public class PeIconAudit {
 
 $fullBinary = (Resolve-Path $BinaryPath).Path
 $iconHashes = [PeIconAudit]::GetRtIconHashes($fullBinary)
-Write-Host "$BinaryPath RT_ICON SHA-256s: $($iconHashes -join ', ')"
-if ($iconHashes -notcontains $expectedHash) {
-  throw "$BinaryPath embedded icon does not match $IconPath ($expectedHash)!"
+Write-Host "$BinaryPath RT_ICON SHA-256s ($($iconHashes.Count) frames): $($iconHashes -join ', ')"
+$missing = @()
+foreach ($entry in $expectedEntries) {
+  if ($iconHashes -notcontains $entry.Hash) {
+    $missing += "$($entry.Size) ($($entry.Hash))"
+  }
 }
-Write-Host "Verified $BinaryPath embeds exact canonical icon ($expectedHash)"
+if ($missing.Count -gt 0) {
+  throw "$BinaryPath is missing embedded icon frame(s) from ${IconPath}: $($missing -join ', ')"
+}
+Write-Host "Verified $BinaryPath embeds all $($expectedEntries.Count) canonical resolutions from $IconPath ($($expectedEntries.Size -join ', '))"

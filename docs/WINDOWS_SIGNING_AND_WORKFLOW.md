@@ -1,5 +1,7 @@
 # FolkTool — Linux Development, Windows Build & Code Signing Guide
 
+> For full details on Authenticode verification, Smart App Control compatibility, Clean Install, Repair, Uninstallation, and user-data preservation, see [`docs/WINDOWS_INSTALLATION_AND_TRUST.md`](WINDOWS_INSTALLATION_AND_TRUST.md).
+
 ## 1. Linux Development & Windows Build Workflow
 
 FolkTool targets **Windows 10/11 x64** while supporting active development on **Linux**.
